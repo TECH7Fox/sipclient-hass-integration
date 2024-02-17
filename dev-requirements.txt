@@ -1,0 +1,8 @@
+pyVoIP
+homeassistant
+pytest-homeassistant-custom-component
+pre-commit
+av
+aiortc
+numpy
+librosa
