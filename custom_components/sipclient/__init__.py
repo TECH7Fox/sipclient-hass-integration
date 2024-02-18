@@ -50,7 +50,7 @@ class OutgoingStreamTrack(MediaStreamTrack):
             raw_audio = await self.hass.async_add_executor_job(self.call.read_audio, self.samples_per_frame, True)
         else:
             # Return silence
-            raw_audio = self.call.read_audio(self.samples_per_frame, False)
+            raw_audio = b"\x80" * self.samples_per_frame
             if self.call.state == CallState.ENDED:
                 await call_ended(self.hass, self.call)
 
@@ -100,7 +100,7 @@ async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
         _LOGGER.error("connectionstatechange " + pc.connectionState)
         if (pc.connectionState == "closed" or pc.connectionState == "failed"):
             _LOGGER.warning("Peer connection ended. Hangup call and remove from calls list")
-            call.hangup()
+            call.hangup() # TODO: Duplicate hangup call
             del hass.data[DOMAIN]["calls"][call_id]
     
     @pc.on("track")
@@ -235,7 +235,7 @@ async def end_call(hass: HomeAssistant, event):
     pc: RTCPeerConnection = hass.data[DOMAIN]["calls"][call_id]["webrtc"]
     pc.close()
     call: VoIPCall = hass.data[DOMAIN]["calls"][call_id]["call"]
-    call.hangup()
+    call.bye() # TODO: better then call.hangup?
 
 
 async def call_ended(hass: HomeAssistant, call: VoIPCall):
@@ -280,8 +280,11 @@ async def new_ice_candidate(hass: HomeAssistant, event): # TODO: Add event type 
         sdpMLineIndex=candidate["sdpMLineIndex"],
     )
 
-    pc: RTCPeerConnection = hass.data[DOMAIN]["calls"][call_id]["webrtc"]
-    await pc.addIceCandidate(remote_ice_candidate)
+    # pc: RTCPeerConnection = hass.data[DOMAIN]["calls"][call_id]["webrtc"]
+    # await pc.addIceCandidate(remote_ice_candidate)
+    for call in hass.data[DOMAIN]["calls"].values(): # TODO: TEMP
+        pc: RTCPeerConnection = call["webrtc"]
+        await pc.addIceCandidate(remote_ice_candidate)
 
 
 # TODO: Setup config flow and multiple entries. One entry per phone?
