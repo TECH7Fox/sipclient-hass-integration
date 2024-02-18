@@ -5,6 +5,7 @@ import aiohttp
 import voluptuous as vol
 
 from typing import List
+from enum import StrEnum
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -22,6 +23,7 @@ from homeassistant.components.websocket_api.http import URL, HomeAssistantView
 from aiohttp import web
 
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate, MediaStreamTrack, RTCConfiguration, RTCIceServer, RTCRtpCapabilities
+from aiortc.mediastreams import MediaStreamError
 from pyVoIP.VoIP import VoIPPhone, InvalidStateError, VoIPCall, PhoneStatus, CallState
 
 import av
@@ -30,6 +32,14 @@ import numpy as np
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "sipclient"
+
+
+class EndedReason(StrEnum):
+    AUDIO_TRACK_FAILED = "Audio track failed"
+    CALL_DENIED = "Call denied"
+    CALL_ENDED_BY_REMOTE = "Call ended by remote party"
+    CALL_ENDED_BY_USER = "Call ended by user"
+    CALL_NOT_ANSWERED = "Call not answered"
 
 
 class OutgoingStreamTrack(MediaStreamTrack):
@@ -52,7 +62,7 @@ class OutgoingStreamTrack(MediaStreamTrack):
             # Return silence
             raw_audio = b"\x80" * self.samples_per_frame
             if self.call.state == CallState.ENDED:
-                await call_ended(self.hass, self.call)
+                await call_ended(self.hass, self.call, reason=EndedReason.CALL_ENDED_BY_REMOTE)
 
         raw_audio = audioop.lin2lin(raw_audio, 1, 2)
         raw_audio = audioop.bias(raw_audio, 2, -32768)
@@ -78,7 +88,7 @@ async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
     )
     pc = RTCPeerConnection(configuration)
 
-    call = hass.data[DOMAIN]["calls"][call_id]["call"] # TODO: Add check if call exists
+    call: VoIPCall = hass.data[DOMAIN]["calls"][call_id]["call"] # TODO: Add check if call exists
     outgoing_stream = OutgoingStreamTrack(call=call, hass=hass)
     pc.addTrack(outgoing_stream)
 
@@ -98,9 +108,9 @@ async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
     @pc.on("connectionstatechange")
     def on_connectionstatechange():
         _LOGGER.error("connectionstatechange " + pc.connectionState)
-        if (pc.connectionState == "closed" or pc.connectionState == "failed"):
-            _LOGGER.warning("Peer connection ended. Hangup call and remove from calls list")
-            call.hangup() # TODO: Duplicate hangup call
+        if (pc.connectionState == "failed"):
+            _LOGGER.warning("Peer connection failed. Hangup call and remove from calls list")
+            call.bye()
             del hass.data[DOMAIN]["calls"][call_id]
     
     @pc.on("track")
@@ -108,9 +118,14 @@ async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
         _LOGGER.warning(f"Received {track.kind} Track")
         if track.kind == "audio":
             while True:
-                # TODO: Add a try catch here for aiortc.mediastreams.MediaStreamError
-                # And check if the call is still active?
-                frame = await track.recv()
+                try:
+                    frame = await track.recv()
+                except MediaStreamError:
+                    _LOGGER.warning("Track ended")
+                    if call.state == CallState.ANSWERED:
+                        call.hangup()
+                        await call_ended(hass, call, reason=EndedReason.AUDIO_TRACK_FAILED)
+                    break
                 if frame:
                     frame_data = frame.to_ndarray().tobytes()
                     frame_data = audioop.bias(frame_data, 2, -32768) # Remove bias
@@ -159,33 +174,22 @@ async def incoming_call(hass: HomeAssistant, call: VoIPCall):
         "sdp": offer.sdp,
     })
 
-    # When the call stops ringing, and it ended or was denied, send a end call event
     while call.state == CallState.RINGING:
         await asyncio.sleep(1)
 
     if call.state == CallState.ENDED: # TODO: or call.state == CallState.DENIED
         _LOGGER.warning("Call ended or denied")
-        hass.bus.fire("sipclient_end_call_event", {
-            "call_id": call.call_id,
-            "caller": {
-                "name": call.request.headers["From"]["caller"],
-                "number": call.request.headers["From"]["number"],
-            },
-            "callee": {
-                "name": call.request.headers["To"]["caller"],
-                "number": call.request.headers["To"]["number"],
-            },
-            "reason": "Call denied or not answered", # TODO: Standardize reasons
-        })
-        del hass.data[DOMAIN]["calls"][call.call_id]
+        await call_ended(hass, call, reason=EndedReason.CALL_NOT_ANSWERED)
 
 
 async def deny_call(hass: HomeAssistant, event):
     _LOGGER.warning(f"Denying call: {event.data}")
     call_id = event.data["call_id"]
     call: VoIPCall = hass.data[DOMAIN]["calls"][call_id]["call"]
-    call.deny()
-    # del hass.data[DOMAIN]["calls"][call_id] # Not needed until deny state is implemented separately
+    try:
+        call.deny()
+    except:
+        call.state = CallState.ENDED
 
 
 async def answer_call(hass: HomeAssistant, event):
@@ -232,16 +236,15 @@ async def start_call(hass: HomeAssistant, event):
 async def end_call(hass: HomeAssistant, event):
     _LOGGER.warning(f"Ending call: {event.data}")
     call_id = event.data["call_id"]
-    pc: RTCPeerConnection = hass.data[DOMAIN]["calls"][call_id]["webrtc"]
-    pc.close()
     call: VoIPCall = hass.data[DOMAIN]["calls"][call_id]["call"]
-    call.bye() # TODO: better then call.hangup?
+    call.hangup() # TODO: Check if answered, dialing, etc
+    await call_ended(hass, call, reason=EndedReason.CALL_ENDED_BY_USER)
 
 
-async def call_ended(hass: HomeAssistant, call: VoIPCall):
+async def call_ended(hass: HomeAssistant, call: VoIPCall, reason: EndedReason):
     _LOGGER.warning(f"Call ended: {call.call_id}")
     pc: RTCPeerConnection = hass.data[DOMAIN]["calls"][call.call_id]["webrtc"]
-    pc.close()
+    await pc.close()
     del hass.data[DOMAIN]["calls"][call.call_id]
 
     hass.bus.fire("sipclient_call_ended_event", {
@@ -254,37 +257,19 @@ async def call_ended(hass: HomeAssistant, call: VoIPCall):
             "name": call.request.headers["To"]["caller"],
             "number": call.request.headers["To"]["number"],
         },
-        "reason": "Call ended by remote party", # TODO: Standardize reasons
+        "reason": reason,
     })
 
 
-async def new_ice_candidate(hass: HomeAssistant, event): # TODO: Add event type for all events
-    if event.data["for"] != "integration":
+async def seek_call(hass: HomeAssistant, event): # TODO: Add event type for all events
+    _LOGGER.warning(f"Seeking call: {event.data}")
+    phone: VoIPPhone | None = hass.data[DOMAIN]["phones"].get(event.data["number"])
+    if not phone:
+        _LOGGER.error(f"Phone {event.data['number']} not found")
         return
-    call_id = event.data["call_id"]
-    candidate = event.data["candidate"]
-
-    if (candidate["candidate"] == ""):
-        return
-
-    splitted_data = candidate["candidate"].replace("candidate:", "").split(" ")
-    remote_ice_candidate = RTCIceCandidate(
-        foundation=splitted_data[0],
-        component=splitted_data[1],
-        protocol=splitted_data[2],
-        priority=int(splitted_data[3]),
-        ip=splitted_data[4],
-        port=int(splitted_data[5]),
-        type=splitted_data[7],
-        sdpMid=candidate["sdpMid"],
-        sdpMLineIndex=candidate["sdpMLineIndex"],
-    )
-
-    # pc: RTCPeerConnection = hass.data[DOMAIN]["calls"][call_id]["webrtc"]
-    # await pc.addIceCandidate(remote_ice_candidate)
-    for call in hass.data[DOMAIN]["calls"].values(): # TODO: TEMP
-        pc: RTCPeerConnection = call["webrtc"]
-        await pc.addIceCandidate(remote_ice_candidate)
+    for call in phone.calls.values():
+        if call.state == CallState.RINGING:
+            await incoming_call(hass, call)
 
 
 # TODO: Setup config flow and multiple entries. One entry per phone?
@@ -295,8 +280,9 @@ async def async_setup(hass: HomeAssistant, config: dict):
     # Setup event handlers
     hass.bus.async_listen("sipclient_answer_call_event", lambda event: hass.async_create_task(answer_call(hass, event)))
     hass.bus.async_listen("sipclient_start_call_event", lambda event: hass.async_create_task(start_call(hass, event)))
+    hass.bus.async_listen("sipclient_deny_call_event", lambda event: hass.async_create_task(deny_call(hass, event)))
     hass.bus.async_listen("sipclient_end_call_event", lambda event: hass.async_create_task(end_call(hass, event)))
-    hass.bus.async_listen("sipclient_new_ice_candidate_event", lambda event: hass.async_create_task(new_ice_candidate(hass, event)))
+    hass.bus.async_listen("sipclient_seek_call_event", lambda event: hass.async_create_task(seek_call(hass, event)))
 
     phones: dict[str, VoIPPhone] = {}
     

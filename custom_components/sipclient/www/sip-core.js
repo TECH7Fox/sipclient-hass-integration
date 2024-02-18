@@ -95,34 +95,33 @@ class ContentCardExample extends LitElement {
             console.log("outgoing call event", event);
             this.call_id = event.data.call_id;
             const answer = new RTCSessionDescription({sdp: event.data.sdp, type: "answer"})
-            console.log("Received sdp: ", answer.sdp);
-            this.pc.setRemoteDescription(answer); // TODO: Wait for ice?
+            this.pc.setRemoteDescription(answer);
             this.requestUpdate();
         }, "sipclient_outgoing_call_event");
 
-        this.hass.connection.subscribeEvents(async (event) => {
-            // while (!this.call_id) {
-            //     console.log("waiting for call_id to be set for incoming candidate");
-            //     await new Promise(r => setTimeout(r, 1000));
-            // }
-            if (event.data.call_id == this.call_id && event.data.for == "client") {
-                try {
-                console.log("adding ICE candidate: ", event);
-                    this.pc.addIceCandidate(event.candidate);
-                } catch (e) {
-                    console.error("Error adding ice candidate: ", e);
-                }
-            }
-        }, "sipclient_new_ice_candidate_event");
-
         this.hass.connection.subscribeEvents((event) => {
-            // call ended
             console.log("call ended event", event);
             this.pc.close();
             this.pc = null;
             this.call_id = "";
             this.requestUpdate();
         }, "sipclient_call_ended_event");
+
+        // seek for existing calls by calling seek_call_event
+        this.hass.connection.sendMessagePromise({
+            type: "fire_event",
+            event_type: "sipclient_seek_call_event",
+            event_data: {
+                number: "1000",
+            },
+        }).then(
+            (resp) => {
+                console.log("Message seek_call success!", resp.result);
+            },
+            (err) => {
+                console.log("Message seek_call failed!", err);
+            }
+        );
     }
 
     create_pc() {
@@ -145,30 +144,6 @@ class ContentCardExample extends LitElement {
             const audio = this.renderRoot.querySelector("#audio");
             audio.srcObject = event.streams[0];
         }
-
-        pc.onicecandidate = async (event) => {
-            if (event.candidate) {
-                console.log("sending ICE candidate");
-
-                // wait until this.call_id is set
-                // while (!this.call_id) {
-                //     console.log("waiting for call_id to be set");
-                //     await new Promise(r => setTimeout(r, 1000));
-                // }
-                console.log("IMPORTANT: this.call_id: ", this.call_id);
-
-                this.hass.connection.sendMessagePromise({
-                    type: "fire_event",
-                    event_type: "sipclient_new_ice_candidate_event",
-                    event_data: {
-                        call_id: "test", //this.call_id,
-                        candidate: event.candidate,
-                        for: "integration",
-                    },
-                });
-            }
-            console.log("onicecandidate", event);
-        };
 
         return pc;
     }
