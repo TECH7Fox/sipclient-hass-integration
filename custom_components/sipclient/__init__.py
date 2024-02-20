@@ -15,7 +15,7 @@ from homeassistant.const import (
     CONF_PORT,
     CONF_USERNAME,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.components import websocket_api
 from homeassistant.components.websocket_api import ActiveConnection
@@ -70,7 +70,7 @@ class OutgoingStreamTrack(MediaStreamTrack):
         raw_audio_array = np.frombuffer(raw_audio, dtype=np.int16)
         raw_audio_array = raw_audio_array.reshape(1, -1)
 
-        frame = av.AudioFrame.from_ndarray(raw_audio_array, format="s16", layout="mono") # AudioFrame(format="s16", layout="mono", samples=samples)
+        frame = av.AudioFrame.from_ndarray(raw_audio_array, format="s16", layout="mono")
         frame.sample_rate = self.sample_rate
         frame.pts = self.pts
         self.pts += self.samples_per_frame
@@ -93,7 +93,6 @@ async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
     pc.addTrack(outgoing_stream)
 
     for transceiver in pc.getTransceivers():
-        # if transceiver.receiver.track.kind == "audio":
         codecs = transceiver.receiver.getCapabilities("audio").codecs
         _LOGGER.warning("All Codecs: " + str(codecs))
         # Only get the PCMU codec
@@ -147,6 +146,27 @@ async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
     return pc
 
 
+async def call_ended(hass: HomeAssistant, call: VoIPCall, reason: EndedReason):
+    _LOGGER.warning(f"Call ended: {call.call_id}")
+    pc: RTCPeerConnection = hass.data[DOMAIN]["calls"][call.call_id]["webrtc"]
+
+    hass.bus.fire("sipclient_call_ended_event", {
+        "call_id": call.call_id,
+        "caller": {
+            "name": call.request.headers["From"]["caller"],
+            "number": call.request.headers["From"]["number"],
+        },
+        "callee": {
+            "name": call.request.headers["To"]["caller"],
+            "number": call.request.headers["To"]["number"],
+        },
+        "reason": reason,
+    })
+
+    await pc.close()
+    del hass.data[DOMAIN]["calls"][call.call_id]
+
+
 async def incoming_call(hass: HomeAssistant, call: VoIPCall):
     _LOGGER.warning("Incoming call to %s", call.phone.username)
     _LOGGER.warning("To header: " + str(call.request.headers["To"]))
@@ -171,18 +191,18 @@ async def incoming_call(hass: HomeAssistant, call: VoIPCall):
             "name": call.request.headers["To"]["caller"],
             "number": call.request.headers["To"]["number"],
         },
-        "sdp": offer.sdp,
+        "sdp": pc.localDescription.sdp,
     })
 
     while call.state == CallState.RINGING:
         await asyncio.sleep(1)
 
-    if call.state == CallState.ENDED: # TODO: or call.state == CallState.DENIED
+    if call.state == CallState.ENDED:
         _LOGGER.warning("Call ended or denied")
         await call_ended(hass, call, reason=EndedReason.CALL_NOT_ANSWERED)
 
 
-async def deny_call(hass: HomeAssistant, event):
+async def deny_call(hass: HomeAssistant, event: Event):
     _LOGGER.warning(f"Denying call: {event.data}")
     call_id = event.data["call_id"]
     call: VoIPCall = hass.data[DOMAIN]["calls"][call_id]["call"]
@@ -192,7 +212,7 @@ async def deny_call(hass: HomeAssistant, event):
         call.state = CallState.ENDED
 
 
-async def answer_call(hass: HomeAssistant, event):
+async def answer_call(hass: HomeAssistant, event: Event):
     _LOGGER.warning(f"Answering call: {event.data}")
     call_id = event.data["call_id"]
     answer = RTCSessionDescription(sdp=event.data["sdp"], type="answer")
@@ -203,7 +223,7 @@ async def answer_call(hass: HomeAssistant, event):
     call.answer()
 
 
-async def start_call(hass: HomeAssistant, event):
+async def start_call(hass: HomeAssistant, event: Event):
     _LOGGER.warning(f"Starting call: {event.data}")
 
     phone: VoIPPhone | None = hass.data[DOMAIN]["phones"].get(event.data["caller"]["number"])
@@ -222,46 +242,28 @@ async def start_call(hass: HomeAssistant, event):
     await pc.setRemoteDescription(offer)
 
     answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
 
     hass.bus.fire("sipclient_outgoing_call_event", {
         "call_id": call.call_id,
         "caller": event.data["caller"],
         "callee": event.data["callee"],
-        "sdp": answer.sdp,
+        "sdp": pc.localDescription.sdp,
     })
 
-    await pc.setLocalDescription(answer)
 
-
-async def end_call(hass: HomeAssistant, event):
+async def end_call(hass: HomeAssistant, event: Event):
     _LOGGER.warning(f"Ending call: {event.data}")
     call_id = event.data["call_id"]
     call: VoIPCall = hass.data[DOMAIN]["calls"][call_id]["call"]
-    call.hangup() # TODO: Check if answered, dialing, etc
+    if call.state == CallState.ANSWERED:
+        call.hangup()
+    else:
+        call.bye()
     await call_ended(hass, call, reason=EndedReason.CALL_ENDED_BY_USER)
 
 
-async def call_ended(hass: HomeAssistant, call: VoIPCall, reason: EndedReason):
-    _LOGGER.warning(f"Call ended: {call.call_id}")
-    pc: RTCPeerConnection = hass.data[DOMAIN]["calls"][call.call_id]["webrtc"]
-    await pc.close()
-    del hass.data[DOMAIN]["calls"][call.call_id]
-
-    hass.bus.fire("sipclient_call_ended_event", {
-        "call_id": call.call_id,
-        "caller": {
-            "name": call.request.headers["From"]["caller"],
-            "number": call.request.headers["From"]["number"],
-        },
-        "callee": {
-            "name": call.request.headers["To"]["caller"],
-            "number": call.request.headers["To"]["number"],
-        },
-        "reason": reason,
-    })
-
-
-async def seek_call(hass: HomeAssistant, event): # TODO: Add event type for all events
+async def seek_call(hass: HomeAssistant, event: Event):
     _LOGGER.warning(f"Seeking call: {event.data}")
     phone: VoIPPhone | None = hass.data[DOMAIN]["phones"].get(event.data["number"])
     if not phone:

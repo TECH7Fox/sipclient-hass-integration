@@ -4,11 +4,14 @@ import {
     css,
 } from "https://unpkg.com/lit-element@2.0.1/lit-element.js?module";
 
+const version = "0.1.6";
+
 console.info(
-    `%c SIP-CORE %c 0.1.1 `,
+    `%c SIP-CORE %c ${version} `,
     'color: white; background: dodgerblue; font-weight: 700;',
     'color: dodgerblue; background: white; font-weight: 700;',
 );
+
 
 class ContentCardExample extends LitElement {
 
@@ -30,11 +33,17 @@ class ContentCardExample extends LitElement {
 
     render() {
         const connection_state = this.pc ? this.pc.connectionState : "unavailable";
+        const ice_gatering_state = this.pc ? this.pc.iceGatheringState : "unavailable";
+        const ice_connection_state = this.pc ? this.pc.iceConnectionState : "unavailable";
         return html`
-            <ha-card header="SIP Core test 0.1.1">
+            <ha-card header="SIP Core test ${version}">
                 call_id: ${this.call_id}
                 <br>
                 connection_state: ${connection_state}
+                <br>
+                ice_gathering: ${ice_gatering_state}
+                <br>
+                ice_connection: ${ice_connection_state}
                 <br><br>
                 <button
                     id="callButton"
@@ -81,21 +90,23 @@ class ContentCardExample extends LitElement {
 
     async connect() {
         console.log("connecting...");
-        this.hass.connection.subscribeEvents((event) => {
+        this.hass.connection.subscribeEvents(async (event) => {
             console.log("incoming call event", event);
             this.call_id = event.data.call_id;
             this.pc = this.create_pc();
             const offer = new RTCSessionDescription({sdp: event.data.sdp, type: "offer"})
-            this.pc.setRemoteDescription(offer); // TODO: async?
+            await this.pc.setRemoteDescription(offer);
+            console.log("incoming offer sdp: ", event.data.sdp);
             this.requestUpdate();
             // TODO: trigger display of answer button
         }, "sipclient_incoming_call_event");
 
-        this.hass.connection.subscribeEvents((event) => {
+        this.hass.connection.subscribeEvents(async (event) => {
             console.log("outgoing call event", event);
             this.call_id = event.data.call_id;
             const answer = new RTCSessionDescription({sdp: event.data.sdp, type: "answer"})
-            this.pc.setRemoteDescription(answer);
+            await this.pc.setRemoteDescription(answer);
+            console.log("incoming answer sdp: ", event.data.sdp);
             this.requestUpdate();
         }, "sipclient_outgoing_call_event");
 
@@ -114,14 +125,7 @@ class ContentCardExample extends LitElement {
             event_data: {
                 number: "1000",
             },
-        }).then(
-            (resp) => {
-                console.log("Message seek_call success!", resp.result);
-            },
-            (err) => {
-                console.log("Message seek_call failed!", err);
-            }
-        );
+        });
     }
 
     create_pc() {
@@ -145,6 +149,16 @@ class ContentCardExample extends LitElement {
             audio.srcObject = event.streams[0];
         }
 
+        pc.onicegatheringstatechange = (event) => {
+            console.log("onicegatheringstatechange", event);
+            this.requestUpdate();
+        }
+
+        pc.oniceconnectionstatechange = (event) => {
+            console.log("oniceconnectionstatechange", event);
+            this.requestUpdate();
+        }
+
         return pc;
     }
 
@@ -161,6 +175,24 @@ class ContentCardExample extends LitElement {
         }
     }
 
+    wait_for_ice_gathering_complete() {
+        return new Promise((resolve) => {
+            if (this.pc.iceGatheringState === "complete") {
+                resolve();
+            } else {
+                const timeout = setTimeout(() => {
+                    resolve();
+                }, 60000); // TODO: Configurable timeout
+                this.pc.onicecandidate = (event) => {
+                    if (event.candidate === null) {
+                        clearTimeout(timeout);
+                        resolve();
+                    }
+                };
+            }
+        });
+    }
+
     async start_call() {
         console.log("call clicked!");
         this.pc = this.create_pc();
@@ -168,19 +200,9 @@ class ContentCardExample extends LitElement {
 
         this.pc.createOffer().then((offer) => {
             return this.pc.setLocalDescription(offer);
-        }).then(() => {
-            return new Promise((resolve) => {
-                if (this.pc.iceGatheringState === "complete") {
-                    resolve();
-                } else {
-                    this.pc.onicecandidate = (event) => {
-                        if (event.candidate === null) {
-                            resolve();
-                        }
-                    };
-                }
-            });
-        }).then(() => {
+        }).then(
+            this.wait_for_ice_gathering_complete.bind(this)
+        ).then(() => {
             const offer = this.pc.localDescription;
         
             this.hass.connection.sendMessagePromise({
@@ -198,20 +220,12 @@ class ContentCardExample extends LitElement {
                     },
                     sdp: offer.sdp,
                 }
-            }).then(
-                (resp) => {
-                    console.log("Message start_call success!", resp.result);
-                },
-                (err) => {
-                    console.log("Message start_call failed!", err);
-                }
-            );
+            });
         });
     }
 
     async deny_call() {
         console.log("deny clicked!");
-        console.log("callID: " + this.call_id)
         this.hass.connection.sendMessagePromise({
             type: "fire_event",
             event_type: "sipclient_deny_call_event",
@@ -226,19 +240,11 @@ class ContentCardExample extends LitElement {
                     "number": "008",
                 },
             }
-        }).then(
-            (resp) => {
-                console.log("Message success!", resp.result);
-            },
-            (err) => {
-                console.log("Message failed!", err);
-            }
-        );
+        });
     }
 
     async end_call() {
         console.log("end clicked!");
-        console.log("callID: " + this.call_id)
         this.hass.connection.sendMessagePromise({
             type: "fire_event",
             event_type: "sipclient_end_call_event",
@@ -254,37 +260,17 @@ class ContentCardExample extends LitElement {
                 },
                 reason: "user ended call",
             }
-        }).then(
-            (resp) => {
-                console.log("Message end_call success!", resp.result);
-            },
-            (err) => {
-                console.log("Message end_call failed!", err);
-            }
-        );
+        });
     }
 
     async answer_call() {
         console.log("answer clicked!");
-        console.log("callID: " + this.call_id);
-
         await this.add_media();
-
         this.pc.createAnswer().then((answer) => {
             return this.pc.setLocalDescription(answer);
-        }).then(() => {
-            return new Promise((resolve) => {
-                if (this.pc.iceGatheringState === "complete") {
-                    resolve();
-                } else {
-                    this.pc.onicecandidate = (event) => {
-                        if (event.candidate === null) {
-                            resolve();
-                        }
-                    };
-                }
-            });
-        }).then(() => {
+        }).then(
+            this.wait_for_ice_gathering_complete.bind(this)
+        ).then(() => {
             const answer = this.pc.localDescription;
         
             this.hass.connection.sendMessagePromise({
@@ -294,14 +280,7 @@ class ContentCardExample extends LitElement {
                     call_id: this.call_id,
                     sdp: answer.sdp,
                 }
-            }).then(
-                (resp) => {
-                    console.log("Message success!", resp.result);
-                },
-                (err) => {
-                    console.log("Message failed!", err);
-                }
-            );
+            });
         });
     }
 }
