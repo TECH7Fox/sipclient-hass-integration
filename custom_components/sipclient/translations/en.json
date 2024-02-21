@@ -1,0 +1,23 @@
+{
+    "title": "SIP Client",
+    "description": "SIP Client description here",
+    "config": {
+        "step": {
+            "init": {
+                "title": "Enter SIP Client Credentials",
+                "description": "Enter your PBX hostname",
+                "data": {
+                    "host": "PBX Host",
+                    "port": "PBX Port",
+                    "username": "Endpoint Username",
+                    "password": "Endpoint Password",
+                    "endpoint_port": "Port for SIP endpoint"
+                }
+            }
+        },
+        "error": {
+            "invalid_auth": "Authentication failed. Make sure you have the correct username and password, and the endpoint is properly configured.",
+            "unknown": "An unknown error occurred. Check the debug logs for more information."
+        }
+    }
+}
