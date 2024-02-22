@@ -1,6 +1,5 @@
 {
     "title": "SIP Client",
-    "description": "SIP Client description here",
     "config": {
         "step": {
             "user": {
