@@ -1,0 +1,23 @@
+{
+    "title": "SIP Client",
+    "config": {
+        "step": {
+            "user": {
+                "title": "Enter SIP Client Credentials",
+                "description": "Enter your PBX host and SIP endpoint credentials.",
+                "data": {
+                    "host": "PBX Host",
+                    "port": "PBX Port",
+                    "username": "Endpoint Username",
+                    "password": "Endpoint Password",
+                    "my_ip": "The Home Assistant IP address",
+                    "endpoint_port": "Override the SIP Client Port (Optional)"
+                }
+            }
+        },
+        "error": {
+            "invalid_auth": "Authentication failed. Make sure you have the correct username and password, and the endpoint is properly configured.",
+            "unknown": "An unknown error occurred. Check the debug logs for more information."
+        }
+    }
+}

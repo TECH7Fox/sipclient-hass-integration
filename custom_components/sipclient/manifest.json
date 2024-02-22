@@ -4,14 +4,14 @@
     "codeowners": [
         "@TECH7Fox"
     ],
-    "config_flow": false,
+    "config_flow": true,
     "dependencies": [],
-    "documentation": "https://github.com/TECH7Fox/Asterisk-integration",
+    "documentation": "https://github.com/TECH7Fox/sipclient-hass-integration",
     "homekit": {},
     "iot_class": "local_polling",
-    "issue_tracker": "https://github.com/TECH7Fox/Asterisk-integration/issues",
+    "issue_tracker": "https://github.com/TECH7Fox/sipclient-hass-integration/issues",
     "loggers": ["custom_components.sipclient"],
-    "requirements": ["pyVoIP", "aiortc"],
+    "requirements": ["pyVoIP", "aiortc", "numpy"],
     "ssdp": [],
     "version": "0.1.0",
     "zeroconf": []
