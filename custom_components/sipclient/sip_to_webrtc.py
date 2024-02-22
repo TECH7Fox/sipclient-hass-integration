@@ -30,6 +30,7 @@ class EndedReason(StrEnum):
 
 
 class OutgoingStreamTrack(MediaStreamTrack):
+    """A PCMU audio stream track that reads from a VoIPCall."""
 
     kind = "audio"
     sample_rate = 8000

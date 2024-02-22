@@ -1,84 +1,81 @@
 import asyncio
 import logging
 
+from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+import pyVoIP
 from pyVoIP.VoIP import PhoneStatus, VoIPPhone
 
-from .const import DOMAIN
+from .const import DOMAIN, MY_IP
 from .sip_to_webrtc import incoming_call, setup_event_listeners
+
+pyVoIP.REGISTER_FAILURE_THRESHOLD = 1
 
 _LOGGER = logging.getLogger(__name__)
 
-# TODO: Setup config flow and multiple entries. One entry per phone?
 
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Set up a config entry."""
+    port: int = entry.data.get("endpoint_port", 5061)
+    username: str = entry.data[CONF_USERNAME]
+    phone = VoIPPhone(
+        server=entry.data[CONF_HOST],
+        port=entry.data[CONF_PORT],
+        username=username,
+        password=entry.data[CONF_PASSWORD],
+        myIP=entry.data[MY_IP],
+        sipPort=port,
+        callCallback=lambda call: hass.async_create_task(incoming_call(hass, call)),
+    )
 
-async def async_setup(hass: HomeAssistant, config: dict):
-    """Set up the SIP Client component."""
+    sip_str = f"{username}@{phone.server}:{phone.port}"
+    _LOGGER.info(f"Starting SIP Client {sip_str}")
 
-    setup_event_listeners(hass)
-
-    phones: dict[str, VoIPPhone] = {}
-
-    if not config[DOMAIN][CONF_HOST]:
-        _LOGGER.error("No host specified")
-        return False
-    if not config[DOMAIN][CONF_PORT]:
-        _LOGGER.error("No port specified")
-        return False
-    if not config[DOMAIN]["clients"]:
-        _LOGGER.error("No clients specified")
-        return False
-    for client in config[DOMAIN]["clients"]:
-        if not client[CONF_USERNAME]:
-            _LOGGER.error("No username specified")
-            return False
-        if not client[CONF_PASSWORD]:
-            _LOGGER.error("No password specified")
-            return False
-        _LOGGER.error(
-            "Adding phone with port: %s", config[DOMAIN][CONF_PORT] + len(phones) + 1
-        )  # TODO: Option to manually specify port
-        phones[client[CONF_USERNAME]] = VoIPPhone(
-            server=config[DOMAIN][CONF_HOST],
-            port=config[DOMAIN][CONF_PORT],
-            username=client[CONF_USERNAME],
-            password=client[CONF_PASSWORD],
-            myIP=config[DOMAIN]["my_ip"],
-            sipPort=config[DOMAIN][CONF_PORT] + len(phones) + 1,
-            callCallback=lambda call: hass.async_create_task(incoming_call(hass, call)),
-        )
-
-    hass.data[DOMAIN] = {
-        "phones": phones,
-        "calls": {},
-    }
-
-    for phone in phones.values():
-        _LOGGER.warning("Starting SIP Client")
+    try:
         phone.start()
-        while phone.get_status() != PhoneStatus.REGISTERED:
-            _LOGGER.warning(f"{phone.username} status: {phone.get_status()}")
-            # If status is failed, raise a notreadyyet exception to retry later
-            await asyncio.sleep(5)
-        _LOGGER.warning("SIP Client started with status: %s", phone.getStatus())
+    except OSError as e:
+        _LOGGER.debug(f"Address {entry.data[MY_IP]}:{port} not available for {sip_str}")
+        raise ConfigEntryNotReady(f"Failed to start SIP Client {sip_str}: {e}")
 
+    while phone.get_status() != PhoneStatus.REGISTERED:
+        if phone.get_status() == PhoneStatus.FAILED:
+            _LOGGER.debug(
+                f"SIP Client failed to register {sip_str}. Timeout or invalid authentication"
+            )
+            raise ConfigEntryNotReady(
+                f"Failed to register SIP Client {sip_str}: Timeout or invalid authentication"
+            )
+        _LOGGER.debug(
+            f"Waiting for {sip_str} to register. Status: {phone.get_status()}"
+        )
+        await asyncio.sleep(5)
+
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = {
+            "phones": {username: phone},
+            "calls": {},
+        }
+        setup_event_listeners(hass)
+    else:
+        hass.data[DOMAIN]["phones"][username] = phone
+
+    _LOGGER.info(f"Started SIP Client {sip_str}")
     return True
 
 
-# TODO: Not yet needed without config flow and entries
-# async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
-#     """Unload a config entry."""
-#     phones: dict[str, VoIPPhone] = hass.data[DOMAIN]
-#     for phone in phones.values():
-#         _LOGGER.warning("Stopping SIP Client")
-#         phone.stop()
-#         _LOGGER.warning("SIP Client stopped")
-#     _LOGGER.warning("All SIP Clients stopped")
-#     return True
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Unload a config entry."""
+    phones: dict[str, VoIPPhone] = hass.data[DOMAIN]["phones"]
+    for phone in phones.values():
+        _LOGGER.info(f"Stopping SIP Client {phone.username}")
+        phone.stop()
+        _LOGGER.info(f"SIP Client {phone.username} stopped")
+    _LOGGER.info("All SIP Clients stopped")
+    return True
 
 
-# async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-#     """Reload a config entry."""
-#     await async_unload_entry(hass, entry)
-#     return await async_setup(hass, entry)
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Reload a config entry."""
+    await async_unload_entry(hass, entry)
+    return await async_setup_entry(hass, entry)

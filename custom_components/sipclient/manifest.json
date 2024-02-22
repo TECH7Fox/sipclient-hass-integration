@@ -4,7 +4,7 @@
     "codeowners": [
         "@TECH7Fox"
     ],
-    "config_flow": false,
+    "config_flow": true,
     "dependencies": [],
     "documentation": "https://github.com/TECH7Fox/sipclient-hass-integration",
     "homekit": {},

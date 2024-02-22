@@ -3,15 +3,16 @@
     "description": "SIP Client description here",
     "config": {
         "step": {
-            "init": {
+            "user": {
                 "title": "Enter SIP Client Credentials",
-                "description": "Enter your PBX hostname",
+                "description": "Enter your PBX host and SIP endpoint credentials.",
                 "data": {
                     "host": "PBX Host",
                     "port": "PBX Port",
                     "username": "Endpoint Username",
                     "password": "Endpoint Password",
-                    "endpoint_port": "Port for SIP endpoint"
+                    "my_ip": "The Home Assistant IP address",
+                    "endpoint_port": "Override the SIP Client Port (Optional)"
                 }
             }
         },
