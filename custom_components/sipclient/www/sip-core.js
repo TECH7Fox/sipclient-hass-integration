@@ -71,8 +71,11 @@ class ContentCardExample extends LitElement {
     // The user supplied configuration. Throw an exception and Home Assistant
     // will render an error card.
     setConfig(config) {
-        if (!config.entity) {
-            throw new Error("You need to define an entity");
+        if (!config.from) {
+            throw new Error("You need to define a from number");
+        }
+        if (!config.to) {
+            throw new Error("You need to define a to number");
         }
         this.config = config;
     }
@@ -123,7 +126,7 @@ class ContentCardExample extends LitElement {
             type: "fire_event",
             event_type: "sipclient_seek_call_event",
             event_data: {
-                number: "1000",
+                number: this.config.from,
             },
         });
     }
@@ -182,7 +185,7 @@ class ContentCardExample extends LitElement {
             } else {
                 const timeout = setTimeout(() => {
                     resolve();
-                }, 60000); // TODO: Configurable timeout
+                }, this.config.ice_timeout);
                 this.pc.onicecandidate = (event) => {
                     if (event.candidate === null) {
                         clearTimeout(timeout);
@@ -204,19 +207,19 @@ class ContentCardExample extends LitElement {
             this.wait_for_ice_gathering_complete.bind(this)
         ).then(() => {
             const offer = this.pc.localDescription;
-        
+
             this.hass.connection.sendMessagePromise({
                 type: "fire_event",
                 event_type: "sipclient_start_call_event",
                 event_data: {
                     sdp: offer.sdp,
                     caller: {
-                        "name": "test",
-                        "number": "1000", // TODO: get from config
+                        "name": "sip_client",
+                        "number": this.config.from,
                     },
                     callee: {
-                        "name": "",
-                        "number": "008",
+                        "name": "phone",
+                        "number": this.config.to,
                     },
                     sdp: offer.sdp,
                 }
@@ -232,12 +235,12 @@ class ContentCardExample extends LitElement {
             event_data: {
                 call_id: this.call_id,
                 callee: {
-                    "name": "test",
-                    "number": "1000",
+                    "name": "sip_client",
+                    "number": this.config.from,
                 },
                 caller: {
-                    "name": "",
-                    "number": "008",
+                    "name": "phone",
+                    "number": this.config.to, // TODO: Incorrect
                 },
             }
         });
@@ -251,12 +254,12 @@ class ContentCardExample extends LitElement {
             event_data: {
                 call_id: this.call_id,
                 callee: {
-                    "name": "test",
-                    "number": "1000",
+                    "name": "sip_client",
+                    "number": this.config.from,  // TODO: Incorrect
                 },
                 caller: {
-                    "name": "",
-                    "number": "008",
+                    "name": "phone",
+                    "number": this.config.to,
                 },
                 reason: "user ended call",
             }
@@ -272,7 +275,7 @@ class ContentCardExample extends LitElement {
             this.wait_for_ice_gathering_complete.bind(this)
         ).then(() => {
             const answer = this.pc.localDescription;
-        
+
             this.hass.connection.sendMessagePromise({
                 type: "fire_event",
                 event_type: "sipclient_answer_call_event",
@@ -294,4 +297,3 @@ window.customCards.push({
     preview: true,
     description: "Card just for testing!"
 });
-
