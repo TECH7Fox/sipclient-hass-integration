@@ -18,6 +18,7 @@ class SIPCore {
             from: "1000",
             ice_timeout: 1000,
         };
+        this.audioStream = null;
         this.number = this.config.from;
         this.hass = document.getElementsByTagName("home-assistant")[0].hass;
         this._setupEvents();
@@ -59,6 +60,7 @@ class SIPCore {
             console.log("call ended event", event);
             this.pc.close();
             this.pc = null;
+            this.audioStream = null;
             this.call_id = "";
             this._triggerUpdate();
         }, "sipclient_call_ended_event");
@@ -90,6 +92,7 @@ class SIPCore {
 
         pc.ontrack = (event) => {
             console.log("ontrack", event);
+            this.audioStream = event.streams[0];
             let audio = document.getElementById("sipcore-audio");
             if (!audio) {
                 audio = document.createElement("audio");

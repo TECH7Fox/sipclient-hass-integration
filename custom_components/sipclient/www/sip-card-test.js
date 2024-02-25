@@ -4,6 +4,7 @@ import {
     css,
 } from "https://unpkg.com/lit-element@2.0.1/lit-element.js?module";
 import { sipCore } from "./sip-core.js";
+import { AudioVisualizer } from "./audio-visualizer.js";
 
 
 class ContentCardExample extends LitElement {
@@ -19,6 +20,25 @@ class ContentCardExample extends LitElement {
         return css`
             ha-card {
                 /* sample css */
+            }
+
+            #audioVisualizer {
+                min-height: 20em;
+                height: 100%;
+                white-space: nowrap;
+                align-items: center;
+                display: flex;
+                justify-content: center;
+            }
+
+            #audioVisualizer div {
+                display: inline-block;
+                width: 3px;
+                height: 100px;
+                margin: 0 7px;
+                background: currentColor;
+                transform: scaleY( .5 );
+                opacity: .25;
             }
         `;
     }
@@ -37,6 +57,11 @@ class ContentCardExample extends LitElement {
         const connection_state = sipCore.pc ? sipCore.pc.connectionState : "unavailable";
         const ice_gatering_state = sipCore.pc ? sipCore.pc.iceGatheringState : "unavailable";
         const ice_connection_state = sipCore.pc ? sipCore.pc.iceConnectionState : "unavailable";
+        if (sipCore.audioStream !== null) {
+            if (this.audioVisualizer === undefined) {
+                this.audioVisualizer = new AudioVisualizer(this.renderRoot, sipCore.audioStream, 16); // TODO: Move to better place
+            }
+        }
         return html`
             <ha-card header="SIP Core test">
                 call_id: ${sipCore.call_id}
@@ -65,7 +90,7 @@ class ContentCardExample extends LitElement {
                 >end</button>
                 <br>
                 <br>
-                <audio id="audio" autoplay controls></audio>
+                <div id="audioVisualizer"></div>
             </ha-card>
         `;
     }
