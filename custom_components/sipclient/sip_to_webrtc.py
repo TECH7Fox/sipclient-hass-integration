@@ -88,19 +88,19 @@ async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
 
     for transceiver in pc.getTransceivers():
         codecs = transceiver.receiver.getCapabilities("audio").codecs
-        _LOGGER.warning("All Codecs: " + str(codecs))
+        _LOGGER.debug("All Codecs: " + str(codecs))
         # Only get the PCMU codec
         codecs = [codec for codec in codecs if codec.name == "PCMU"]
-        _LOGGER.warning("Sorted Codecs: " + str(codecs))
+        _LOGGER.debug("Sorted Codecs: " + str(codecs))
         transceiver.setCodecPreferences(codecs)
 
     @pc.on("datachannel")
     def on_datachannel(channel):
-        _LOGGER.error("datachannel" + channel)
+        _LOGGER.debug("datachannel" + channel)
 
     @pc.on("connectionstatechange")
     def on_connectionstatechange():
-        _LOGGER.error("connectionstatechange " + pc.connectionState)
+        _LOGGER.debug("connectionstatechange " + pc.connectionState)
         if pc.connectionState == "failed":
             _LOGGER.warning(
                 "Peer connection failed. Hangup call and remove from calls list"
@@ -110,13 +110,13 @@ async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
 
     @pc.on("track")
     async def on_track(track):
-        _LOGGER.warning(f"Received {track.kind} Track")
+        _LOGGER.debug(f"Received {track.kind} Track")
         if track.kind == "audio":
             while True:
                 try:
                     frame = await track.recv()
                 except MediaStreamError:
-                    _LOGGER.warning("Track ended")
+                    _LOGGER.debug("Track ended")
                     if call.state == CallState.ANSWERED:
                         call.hangup()
                         await call_ended(
@@ -134,18 +134,18 @@ async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
 
     @pc.on("iceconnectionstatechange")
     async def on_iceconnectionstatechange():
-        _LOGGER.error("iceconnectionstatechange " + pc.iceConnectionState)
+        _LOGGER.debug("iceconnectionstatechange " + pc.iceConnectionState)
 
     @pc.on("icegatheringstatechange")
     async def on_icegatheringstatechange():
-        _LOGGER.error(f"changed icegatheringstatechange {pc.iceGatheringState}")
+        _LOGGER.debug(f"changed icegatheringstatechange {pc.iceGatheringState}")
 
     hass.data[DOMAIN]["calls"][call_id]["webrtc"] = pc
     return pc
 
 
 async def call_ended(hass: HomeAssistant, call: VoIPCall, reason: EndedReason):
-    _LOGGER.warning(f"Call ended: {call.call_id}")
+    _LOGGER.info(f"Call ended: {call.call_id}")
     pc: RTCPeerConnection = hass.data[DOMAIN]["calls"][call.call_id]["webrtc"]
 
     hass.bus.fire(
@@ -169,9 +169,7 @@ async def call_ended(hass: HomeAssistant, call: VoIPCall, reason: EndedReason):
 
 
 async def incoming_call(hass: HomeAssistant, call: VoIPCall):
-    _LOGGER.warning("Incoming call to %s", call.phone.username)
-    _LOGGER.warning("To header: " + str(call.request.headers["To"]))
-    _LOGGER.warning("From header: " + str(call.request.headers["From"]))
+    _LOGGER.info(f"Incoming call to {call.phone.username}")
 
     hass.data[DOMAIN]["calls"][call.call_id] = {
         "call": call,
@@ -202,12 +200,12 @@ async def incoming_call(hass: HomeAssistant, call: VoIPCall):
         await asyncio.sleep(1)
 
     if call.state == CallState.ENDED:
-        _LOGGER.warning("Call ended or denied")
+        _LOGGER.info("Outgoing call timed out or denied")
         await call_ended(hass, call, reason=EndedReason.CALL_NOT_ANSWERED)
 
 
 async def deny_call(hass: HomeAssistant, event: Event):
-    _LOGGER.warning(f"Denying call: {event.data}")
+    _LOGGER.debug(f"Denying call: {event.data}")
     call_id = event.data["call_id"]
     call: VoIPCall = hass.data[DOMAIN]["calls"][call_id]["call"]
     try:
@@ -217,27 +215,26 @@ async def deny_call(hass: HomeAssistant, event: Event):
 
 
 async def answer_call(hass: HomeAssistant, event: Event):
-    _LOGGER.warning(f"Answering call: {event.data}")
+    _LOGGER.debug(f"Answering call: {event.data}")
     call_id = event.data["call_id"]
     answer = RTCSessionDescription(sdp=event.data["sdp"], type="answer")
     pc: RTCPeerConnection = hass.data[DOMAIN]["calls"][call_id]["webrtc"]
     await pc.setRemoteDescription(answer)
-    _LOGGER.warning(f"Answering call {call_id}")
     call: VoIPCall = hass.data[DOMAIN]["calls"][call_id]["call"]
     call.answer()
 
 
 async def start_call(hass: HomeAssistant, event: Event):
-    _LOGGER.warning(f"Starting call: {event.data}")
+    _LOGGER.info(f"Starting call: {event.data}")
 
     phone: VoIPPhone | None = hass.data[DOMAIN]["phones"].get(
-        event.data["caller"]["number"]
+        event.data["caller"]
     )
     if not phone:
-        _LOGGER.error(f"Phone {event.data['caller']['number']} not found")
+        _LOGGER.error(f"Phone {event.data['caller']} not found")
         return
 
-    call = phone.call(event.data["callee"]["number"])
+    call = phone.call(event.data["callee"])
     hass.data[DOMAIN]["calls"][call.call_id] = {
         "call": call,
     }

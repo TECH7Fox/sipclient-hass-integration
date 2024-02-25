@@ -1,9 +1,3 @@
-import {
-    LitElement,
-    html,
-    css,
-} from "https://unpkg.com/lit-element@2.0.1/lit-element.js?module";
-
 const version = "0.1.6";
 
 console.info(
@@ -13,95 +7,43 @@ console.info(
 );
 
 
-class ContentCardExample extends LitElement {
-
-    static get properties() {
-        return {
-            hass: {},
-            config: {},
-            call_id: "",
+class SIPCore {
+    constructor() {
+        this.pc = null;
+        this.call_id = "";
+        this.call_state = "idle"; // ???
+        this.caller = "";
+        this.callee = "";
+        this.config = { // TODO: Temp
+            from: "1000",
+            ice_timeout: 1000,
         };
+        this.number = this.config.from;
+        this.hass = document.getElementsByTagName("home-assistant")[0].hass;
+        this._setupEvents();
     }
 
-    static get styles() {
-        return css`
-            ha-card {
-                /* sample css */
-            }
-        `;
+    _triggerUpdate() {
+        const event = new CustomEvent("sipcore-update", {
+            detail: {},
+            bubbles: true,
+            composed: true,
+        });
+        window.dispatchEvent(event);
     }
 
-    render() {
-        const connection_state = this.pc ? this.pc.connectionState : "unavailable";
-        const ice_gatering_state = this.pc ? this.pc.iceGatheringState : "unavailable";
-        const ice_connection_state = this.pc ? this.pc.iceConnectionState : "unavailable";
-        return html`
-            <ha-card header="SIP Core test ${version}">
-                call_id: ${this.call_id}
-                <br>
-                connection_state: ${connection_state}
-                <br>
-                ice_gathering: ${ice_gatering_state}
-                <br>
-                ice_connection: ${ice_connection_state}
-                <br><br>
-                <button
-                    id="callButton"
-                    @click="${this.start_call}"
-                >call</button>
-                <button
-                    id="denyButton"
-                    @click="${this.deny_call}"
-                >deny</button>
-                <button
-                    id="answerButton"
-                    @click="${this.answer_call}"
-                >answer</button>
-                <button
-                    id="endButton"
-                    @click="${this.end_call}"
-                >end</button>
-                <br>
-                <br>
-                <audio id="audio" autoplay controls></audio>
-            </ha-card>
-        `;
-    }
-
-    // The user supplied configuration. Throw an exception and Home Assistant
-    // will render an error card.
-    setConfig(config) {
-        if (!config.from) {
-            throw new Error("You need to define a from number");
-        }
-        if (!config.to) {
-            throw new Error("You need to define a to number");
-        }
-        this.config = config;
-    }
-
-    firstUpdated() {
-        console.log("firstUpdated");
-        this.connect();
-    }
-
-    // The height of your card. Home Assistant uses this to automatically
-    // distribute all cards over the available columns.
-    getCardSize() {
-        return 3;
-    }
-
-    async connect() {
+    async _setupEvents() {
         console.log("connecting...");
         this.hass.connection.subscribeEvents(async (event) => {
             console.log("incoming call event", event);
             this.call_id = event.data.call_id;
-            this.pc = this.create_pc();
+            this.caller = event.data.caller;
+            this.callee = event.data.callee;
+            this.pc = this._createPc();
             const offer = new RTCSessionDescription({sdp: event.data.sdp, type: "offer"})
             await this.pc.setRemoteDescription(offer);
             console.log("incoming offer sdp: ", event.data.sdp);
-            this.requestUpdate();
-            // TODO: trigger display of answer button
+            this._triggerUpdate();
         }, "sipclient_incoming_call_event");
 
         this.hass.connection.subscribeEvents(async (event) => {
@@ -110,7 +52,7 @@ class ContentCardExample extends LitElement {
             const answer = new RTCSessionDescription({sdp: event.data.sdp, type: "answer"})
             await this.pc.setRemoteDescription(answer);
             console.log("incoming answer sdp: ", event.data.sdp);
-            this.requestUpdate();
+            this._triggerUpdate();
         }, "sipclient_outgoing_call_event");
 
         this.hass.connection.subscribeEvents((event) => {
@@ -118,10 +60,10 @@ class ContentCardExample extends LitElement {
             this.pc.close();
             this.pc = null;
             this.call_id = "";
-            this.requestUpdate();
+            this._triggerUpdate();
         }, "sipclient_call_ended_event");
 
-        // seek for existing calls by calling seek_call_event
+        // seek for existing calls
         this.hass.connection.sendMessagePromise({
             type: "fire_event",
             event_type: "sipclient_seek_call_event",
@@ -131,7 +73,7 @@ class ContentCardExample extends LitElement {
         });
     }
 
-    create_pc() {
+    _createPc() {
         const configuration = {
             'iceServers': [
                 {
@@ -143,29 +85,36 @@ class ContentCardExample extends LitElement {
 
         pc.onconnectionstatechange = (event) => {
             console.log("onconnectionstatechange", event);
-            this.requestUpdate();
+            this._triggerUpdate();
         }
 
         pc.ontrack = (event) => {
             console.log("ontrack", event);
-            const audio = this.renderRoot.querySelector("#audio");
+            let audio = document.getElementById("sipcore-audio");
+            if (!audio) {
+                audio = document.createElement("audio");
+                audio.id = "sipcore-audio";
+                audio.autoplay = true;
+                audio.controls = true;
+                audio.style.display = "none";
+            }
             audio.srcObject = event.streams[0];
         }
 
         pc.onicegatheringstatechange = (event) => {
             console.log("onicegatheringstatechange", event);
-            this.requestUpdate();
+            this._triggerUpdate();
         }
 
         pc.oniceconnectionstatechange = (event) => {
             console.log("oniceconnectionstatechange", event);
-            this.requestUpdate();
+            this._triggerUpdate();
         }
 
         return pc;
     }
 
-    async add_media() {
+    async _addMedia() {
         const stream = await navigator.mediaDevices.getUserMedia(
             {
                 video: false,
@@ -178,7 +127,7 @@ class ContentCardExample extends LitElement {
         }
     }
 
-    wait_for_ice_gathering_complete() {
+    _waitForIceGathering() {
         return new Promise((resolve) => {
             if (this.pc.iceGatheringState === "complete") {
                 resolve();
@@ -196,83 +145,66 @@ class ContentCardExample extends LitElement {
         });
     }
 
-    async start_call() {
+    async startCall(to) {
         console.log("call clicked!");
-        this.pc = this.create_pc();
-        await this.add_media();
+        this.pc = this._createPc();
+        await this._addMedia();
 
         this.pc.createOffer().then((offer) => {
             return this.pc.setLocalDescription(offer);
         }).then(
-            this.wait_for_ice_gathering_complete.bind(this)
+            this._waitForIceGathering.bind(this)
         ).then(() => {
             const offer = this.pc.localDescription;
-
+            this.caller = this.number;
+            this.callee = to;
             this.hass.connection.sendMessagePromise({
                 type: "fire_event",
                 event_type: "sipclient_start_call_event",
                 event_data: {
                     sdp: offer.sdp,
-                    caller: {
-                        "name": "sip_client",
-                        "number": this.config.from,
-                    },
-                    callee: {
-                        "name": "phone",
-                        "number": this.config.to,
-                    },
+                    caller: this.caller,
+                    callee: this.callee,
                     sdp: offer.sdp,
                 }
             });
         });
     }
 
-    async deny_call() {
+    async denyCall() {
         console.log("deny clicked!");
         this.hass.connection.sendMessagePromise({
             type: "fire_event",
             event_type: "sipclient_deny_call_event",
             event_data: {
                 call_id: this.call_id,
-                callee: {
-                    "name": "sip_client",
-                    "number": this.config.from,
-                },
-                caller: {
-                    "name": "phone",
-                    "number": this.config.to, // TODO: Incorrect
-                },
+                callee: this.callee,
+                caller: this.caller,
             }
         });
     }
 
-    async end_call() {
+    async endCall() {
         console.log("end clicked!");
         this.hass.connection.sendMessagePromise({
             type: "fire_event",
             event_type: "sipclient_end_call_event",
             event_data: {
                 call_id: this.call_id,
-                callee: {
-                    "name": "sip_client",
-                    "number": this.config.from,  // TODO: Incorrect
-                },
-                caller: {
-                    "name": "phone",
-                    "number": this.config.to,
-                },
+                callee: this.callee,
+                caller: this.caller,
                 reason: "user ended call",
             }
         });
     }
 
-    async answer_call() {
+    async answerCall() {
         console.log("answer clicked!");
-        await this.add_media();
+        await this._addMedia();
         this.pc.createAnswer().then((answer) => {
             return this.pc.setLocalDescription(answer);
         }).then(
-            this.wait_for_ice_gathering_complete.bind(this)
+            this._waitForIceGathering.bind(this)
         ).then(() => {
             const answer = this.pc.localDescription;
 
@@ -288,12 +220,6 @@ class ContentCardExample extends LitElement {
     }
 }
 
-customElements.define("test-card", ContentCardExample);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
-    type: "test-card",
-    name: "Test Card",
-    preview: true,
-    description: "Card just for testing!"
-});
+const sipCore = new SIPCore();
+// window.sipCore = sipCore; // TODO: plan B
+export { sipCore };
