@@ -27,6 +27,11 @@ class SIPCore {
         this.caller = "";
         this.callee = "";
         this.config = {};
+        this.currentExtensionConfig = {
+            number: "",
+            name: "",
+            camera: "",
+        };
         this.timer = "00:00";
         this.audioStream = null;
         this.hass = document.getElementsByTagName("home-assistant")[0].hass;
@@ -50,6 +55,8 @@ class SIPCore {
                     });
                     this._setupButton();
                 }
+
+                this._triggerUpdate();
             });
         // TODO: Dynamically import sip-call-dialog.js?
     }
@@ -185,6 +192,13 @@ class SIPCore {
             console.log("onconnectionstatechange", event);
             switch (pc.connectionState) {
                 case "connected":
+                    console.log("callee: ", this.callee);
+                    this.currentExtensionConfig = { // TODO: Move this and triggerUpdate to function with error checking
+                        number: this.callee,
+                        name: this.config.extensions[0].name, // TODO: Temporary use first
+                        camera: this.config.extensions[0].camera,
+                    };
+                    this._triggerUpdate();
                     this.call_state = CALLSTATE.CONNECTED;
                     this._startTimer();
                     break;

@@ -121,6 +121,8 @@ class SIPCallDialog extends LitElement {
             if (this.audioVisualizer === undefined) {
                 this.audioVisualizer = new AudioVisualizer(this.renderRoot, sipCore.audioStream, 16); // TODO: Move to better place
             }
+        } else {
+            this.audioVisualizer = undefined;
         }
         return html`
             <ha-dialog ?open=${this.open} @closed=${this.closeDialog} hideActions flexContent .heading=${true} data-domain="camera">
@@ -135,13 +137,13 @@ class SIPCallDialog extends LitElement {
                 </ha-dialog-header>
                 <div tabindex="-1" dialogInitialFocus>
                     <div style="width: 100%; text-align: center;">
-                        <h2 style="text-center">Doorbell</h2>
+                        <h2 style="text-center">${sipCore.currentExtensionConfig.name}</h2>
                     </div>
                     <ha-camera-stream
                         allow-exoplayer
                         muted
                         .hass=${this.hass}
-                        .stateObj=${this.hass.states["camera.doorbell"]}
+                        .stateObj=${this.hass.states[sipCore.currentExtensionConfig.camera]}
                     ></ha-camera-stream>
                     <div style="display: flex; justify-content: space-between; padding-left: 46px; padding-right: 46px; padding-top: 24px">
                         <span>${sipCore.call_state}</span>

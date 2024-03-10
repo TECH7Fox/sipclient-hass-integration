@@ -61,7 +61,16 @@ class ContentCardExample extends LitElement {
             if (this.audioVisualizer === undefined) {
                 this.audioVisualizer = new AudioVisualizer(this.renderRoot, sipCore.audioStream, 16); // TODO: Move to better place
             }
+        } else {
+            this.audioVisualizer = undefined;
         }
+        let number = "";
+        let name = "";
+        console.log("config at render: ", sipCore.config);
+        if (sipCore.config.extensions && sipCore.config.extensions.length > 0) {
+            number = sipCore.config.extensions[0].number;
+            name = sipCore.config.extensions[0].name;
+        };
         return html`
             <ha-card header="SIP Core test">
                 call_id: ${sipCore.call_id}
@@ -76,8 +85,8 @@ class ContentCardExample extends LitElement {
                 <br><br>
                 <button
                     id="callButton"
-                    @click="${() => sipCore.startCall(sipCore.config.extensions[0].number)}"
-                >${sipCore.config.extensions[0].name}</button>
+                    @click="${() => sipCore.startCall(number)}"
+                >${name}</button>
                 <button
                     id="denyButton"
                     @click="${() => sipCore.denyCall()}"
