@@ -1,0 +1,25 @@
+{
+    "username": "1000",
+    "ice_timeout": 1000,
+    "popup": true,
+    "extensions": [
+        {
+            "number": "008",
+            "name": "Jordy Deskphone",
+            "camera": "camera.doorbell"
+        }
+    ],
+    "buttons": [
+        {
+            "label": "Open Door",
+            "type": "service_call",
+            "data": "asterisk.send_action"
+        },
+        {
+            "label": "Send DTMF 1",
+            "type": "dtmf",
+            "data": "1"	
+        }
+    ],
+    "override_popup_component": null
+}

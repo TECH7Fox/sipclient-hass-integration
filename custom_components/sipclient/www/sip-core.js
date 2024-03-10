@@ -1,4 +1,7 @@
-const version = "0.1.6";
+import "./sip-call-dialog.js";
+
+
+const version = "0.1.7";
 
 console.info(
     `%c SIP-CORE %c ${version} `,
@@ -7,21 +10,91 @@ console.info(
 );
 
 
+class CALLSTATE {
+    static IDLE = "IDLE";
+    static INCOMING = "INCOMING CALL...";
+    static CALLING = "CALLING...";
+    static CONNECTING = "CONNECTING...";
+    static CONNECTED = "CONNECTED";
+}
+
+
 class SIPCore {
     constructor() {
         this.pc = null;
         this.call_id = "";
-        this.call_state = "idle"; // ???
+        this.call_state = CALLSTATE.IDLE;
         this.caller = "";
         this.callee = "";
-        this.config = { // TODO: Temp
-            from: "1000",
-            ice_timeout: 1000,
-        };
+        this.config = {};
+        this.timer = "00:00";
         this.audioStream = null;
-        this.number = this.config.from;
         this.hass = document.getElementsByTagName("home-assistant")[0].hass;
-        this._setupEvents();
+        fetch('/local/sip-config.json?' + new Date().getTime())
+            .then(response => {
+                console.log("config response: ", response);
+                return response.json();
+            })
+            .then(data => {
+                console.log("config loaded: ", data);
+                this.config = data;
+
+                this.number = this.config.username;
+                this._setupEvents();
+                
+                if (this.config.popup) {
+                    this._setupPopup();
+                    window.addEventListener('location-changed', () => {
+                        console.log("location changed!");
+                        this._setupButton();
+                    });
+                    this._setupButton();
+                }
+            });
+        // TODO: Dynamically import sip-call-dialog.js?
+    }
+
+    _setupButton() {
+        const dialog = document.getElementsByTagName("sip-call-dialog")[0];
+        const panel = document.getElementsByTagName("home-assistant")[0]
+            .shadowRoot.querySelector("home-assistant-main")
+            .shadowRoot.querySelector("ha-panel-lovelace")
+            
+        if (panel === null) {
+            console.log("panel not found!");
+            return;
+        }
+
+        const actionItems = panel.shadowRoot.querySelector("hui-root")
+            .shadowRoot.querySelector(".action-items");
+
+        if (actionItems.querySelector("#sipcore-call-button"))
+            return;
+
+        const callButton = document.createElement("ha-icon-button");
+        callButton.label = "Open Call Popup";
+        const icon = document.createElement("ha-icon");
+        icon.style = "display: flex; align-items: center; justify-content: center;";
+        icon.icon = "mdi:phone";
+        callButton.slot = "actionItems";
+        callButton.id = "sipcore-call-button";
+        callButton.appendChild(icon);
+        callButton.addEventListener("click", () => {
+            console.log("open call dialog!");
+            dialog.open = true;
+        });
+        actionItems.appendChild(callButton);
+    }
+
+    _setupPopup() {
+        let POPUP_COMPONENT = "sip-call-dialog";
+        if (this.config.override_popup_component) {
+            POPUP_COMPONENT = this.config.override_popup_component;
+        }
+        if (document.getElementsByTagName(POPUP_COMPONENT).length < 1) {
+            const dialog = document.createElement(POPUP_COMPONENT);
+            document.body.appendChild(dialog);
+        }
     }
 
     _triggerUpdate() {
@@ -33,6 +106,25 @@ class SIPCore {
         window.dispatchEvent(event);
     }
 
+    _startTimer() {
+        let minutes = 0;
+        let seconds = 0;
+        this.timerId = setInterval(() => {
+            seconds++;
+            if (seconds === 60) {
+                minutes++;
+                seconds = 0;
+            }
+            this.timer = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            this._triggerUpdate();
+        }, 1000);
+    }
+
+    _stopTimer() {
+        clearInterval(this.timerId);
+        this.timer = "00:00";
+    }
+
     async _setupEvents() {
         console.log("connecting...");
         this.hass.connection.subscribeEvents(async (event) => {
@@ -40,6 +132,7 @@ class SIPCore {
             this.call_id = event.data.call_id;
             this.caller = event.data.caller;
             this.callee = event.data.callee;
+            this.call_state = CALLSTATE.INCOMING;
             this.pc = this._createPc();
             const offer = new RTCSessionDescription({sdp: event.data.sdp, type: "offer"})
             await this.pc.setRemoteDescription(offer);
@@ -50,6 +143,7 @@ class SIPCore {
         this.hass.connection.subscribeEvents(async (event) => {
             console.log("outgoing call event", event);
             this.call_id = event.data.call_id;
+            this.call_state = CALLSTATE.CALLING;
             const answer = new RTCSessionDescription({sdp: event.data.sdp, type: "answer"})
             await this.pc.setRemoteDescription(answer);
             console.log("incoming answer sdp: ", event.data.sdp);
@@ -58,6 +152,8 @@ class SIPCore {
 
         this.hass.connection.subscribeEvents((event) => {
             console.log("call ended event", event);
+            this._stopTimer();
+            this.call_state = CALLSTATE.IDLE;
             this.pc.close();
             this.pc = null;
             this.audioStream = null;
@@ -70,7 +166,7 @@ class SIPCore {
             type: "fire_event",
             event_type: "sipclient_seek_call_event",
             event_data: {
-                number: this.config.from,
+                number: this.config.username,
             },
         });
     }
@@ -87,6 +183,21 @@ class SIPCore {
 
         pc.onconnectionstatechange = (event) => {
             console.log("onconnectionstatechange", event);
+            switch (pc.connectionState) {
+                case "connected":
+                    this.call_state = CALLSTATE.CONNECTED;
+                    this._startTimer();
+                    break;
+                case "disconnected":
+                case "failed":
+                case "closed":
+                    this._stopTimer();
+                    this.call_state = CALLSTATE.IDLE;
+                    break;
+                default:
+                    console.log("unknown connection state: ", pc.connectionState);
+                    break;
+            }
             this._triggerUpdate();
         }
 
@@ -225,4 +336,4 @@ class SIPCore {
 
 const sipCore = new SIPCore();
 // window.sipCore = sipCore; // TODO: plan B
-export { sipCore };
+export { sipCore, CALLSTATE };

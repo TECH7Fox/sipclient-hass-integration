@@ -66,6 +66,8 @@ class ContentCardExample extends LitElement {
             <ha-card header="SIP Core test">
                 call_id: ${sipCore.call_id}
                 <br>
+                call_state: ${sipCore.call_state}
+                <br>
                 connection_state: ${connection_state}
                 <br>
                 ice_gathering: ${ice_gatering_state}
@@ -74,8 +76,8 @@ class ContentCardExample extends LitElement {
                 <br><br>
                 <button
                     id="callButton"
-                    @click="${() => sipCore.startCall(this.config.to)}"
-                >call</button>
+                    @click="${() => sipCore.startCall(sipCore.config.extensions[0].number)}"
+                >${sipCore.config.extensions[0].name}</button>
                 <button
                     id="denyButton"
                     @click="${() => sipCore.denyCall()}"
