@@ -109,12 +109,6 @@ class ContentCardExample extends LitElement {
     // The user supplied configuration. Throw an exception and Home Assistant
     // will render an error card.
     setConfig(config) {
-        if (!config.from) {
-            throw new Error("You need to define a from number");
-        }
-        if (!config.to) {
-            throw new Error("You need to define a to number");
-        }
         this.config = config;
     }
 
