@@ -106,7 +106,8 @@ async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
                 "Peer connection failed. Hangup call and remove from calls list"
             )
             call.bye()
-            del hass.data[DOMAIN]["calls"][call_id]
+            if call_id in hass.data[DOMAIN]["calls"]:
+                del hass.data[DOMAIN]["calls"][call_id]
 
     @pc.on("track")
     async def on_track(track):
@@ -165,7 +166,8 @@ async def call_ended(hass: HomeAssistant, call: VoIPCall, reason: EndedReason):
     )
 
     await pc.close()
-    del hass.data[DOMAIN]["calls"][call.call_id]
+    if call.call_id in hass.data[DOMAIN]["calls"]:
+        del hass.data[DOMAIN]["calls"][call.call_id]
 
 
 async def incoming_call(hass: HomeAssistant, call: VoIPCall):
@@ -207,6 +209,9 @@ async def incoming_call(hass: HomeAssistant, call: VoIPCall):
 async def deny_call(hass: HomeAssistant, event: Event):
     _LOGGER.debug(f"Denying call: {event.data}")
     call_id = event.data["call_id"]
+    if call_id not in hass.data[DOMAIN]["calls"]:
+        _LOGGER.error(f"Call {call_id} not found")
+        return
     call: VoIPCall = hass.data[DOMAIN]["calls"][call_id]["call"]
     try:
         call.deny()
@@ -227,9 +232,7 @@ async def answer_call(hass: HomeAssistant, event: Event):
 async def start_call(hass: HomeAssistant, event: Event):
     _LOGGER.info(f"Starting call: {event.data}")
 
-    phone: VoIPPhone | None = hass.data[DOMAIN]["phones"].get(
-        event.data["caller"]
-    )
+    phone: VoIPPhone | None = hass.data[DOMAIN]["phones"].get(event.data["caller"])
     if not phone:
         _LOGGER.error(f"Phone {event.data['caller']} not found")
         return

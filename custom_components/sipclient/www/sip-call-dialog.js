@@ -42,6 +42,7 @@ class SIPCallDialog extends LitElement {
                 align-items: center;
                 display: flex;
                 justify-content: center;
+                padding-top: 2em;
             }
 
             #audioVisualizer div {
@@ -54,12 +55,13 @@ class SIPCallDialog extends LitElement {
                 opacity: .25;
             }
 
-            ha-dialog[data-domain="camera"] {
+            ha-dialog {
                 --dialog-content-padding: 0;
+                --mdc-dialog-min-width: 600px;
             }
 
             ha-camera-stream {
-                height: auto;
+                height: 100%;
                 width: 100%;
                 display: block;
             }
@@ -67,11 +69,6 @@ class SIPCallDialog extends LitElement {
             @media (max-width: 450px), (max-height: 500px) {
                 ha-dialog {
                   --dialog-surface-margin-top: 0px;
-                }
-            }
-
-            @media (max-width: 450px), (max-height: 500px) {
-                ha-dialog {
                   --mdc-dialog-min-width: calc( 100vw - env(safe-area-inset-right) - env(safe-area-inset-left) );
                   --mdc-dialog-max-width: calc( 100vw - env(safe-area-inset-right) - env(safe-area-inset-left) );
                   --mdc-dialog-min-height: 100%;
@@ -93,37 +90,159 @@ class SIPCallDialog extends LitElement {
                 --mdc-icon-button-size: 64px;
                 --mdc-icon-size: 32px;
             }
+
+            .row {
+                display: flex;
+                flex-direction: row;
+            }
+
+            .top-row {
+                display: flex;
+                flex-direction: row;
+                justify-content: space-between;
+                margin-left: 24px;
+                margin-right: 24px;
+            }
+
+            .bottom-row {
+                display: flex;
+                justify-content: space-between;
+                margin: 24px;
+            }
+              
+            .scrolling_text {
+                overflow: hidden;
+                display: flex;
+                white-space: nowrap;
+                width: 80px;
+            }
+
+            .text {
+                margin-right: 5px;
+            }
+
+            .content {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 300px;
+                width: 100%;
+                background-color: #2d3033;
+            }
+
+            /* TODO: check if needed
+            @-moz-keyframes animate_text {
+                from { -moz-transform: translate3d(0, 0, 0); }
+                to { -moz-transform: translate3d(-100%, 0, 0); }
+            }
+              
+            @-webkit-keyframes animate_text {
+                from { -webkit-transform: translate3d(0, 0, 0); }
+                to { -webkit-transform: translate3d(-100%, 0, 0); }
+            }
+            */
+            
+            @keyframes scrolling_left {
+                from {
+                    -webkit-transform: translate3d(0, 0, 0);
+                    -moz-transform: translate3d(0, 0, 0);
+                    transform: translate3d(0, 0, 0);
+                }
+                to {
+                    -webkit-transform: translate3d(-100%, 0, 0);
+                    -moz-transform: translate3d(-100%, 0, 0);
+                    transform: translate3d(-100%, 0, 0);
+                }
+            }
+            
+            @keyframes scrolling_right {
+                from {
+                    -webkit-transform: translate3d(-100%, 0, 0);
+                    -moz-transform: translate3d(-100%, 0, 0);
+                    transform: translate3d(-100%, 0, 0);
+                }
+                to {
+                    -webkit-transform: translate3d(0, 0, 0);
+                    -moz-transform: translate3d(0, 0, 0);
+                    transform: translate3d(0, 0, 0);
+                }
+            }
         `;
     }
 
     connectedCallback() {
         super.connectedCallback();
-        window.addEventListener('sipcore-update', () => this.requestUpdate());
+        this.updateHandler = (event) => {
+            switch (event.detail.reason) {
+                case "outgoing_call":
+                case "incoming_call":
+                    this.open = true;
+                case "call_ended":
+                    this.open = false;
+                    break;
+            }
+            this.requestUpdate();
+        }
+        window.addEventListener('sipcore-update', this.updateHandler);
     }
     
     disconnectedCallback() {
         super.disconnectedCallback();
-        window.removeEventListener('sipcore-update', () => this.requestUpdate());
+        window.removeEventListener('sipcore-update', this.updateHandler);
     }
 
     closeDialog() {
         this.open = false;
+        this.requestUpdate();
     }
 
     render() {
         this.hass = sipCore.hass;
+        this.config = sipCore.config.popup.card_config;
 
         console.log("dialog open: ", this.open);
-        const connection_state = sipCore.pc ? sipCore.pc.connectionState : "unavailable";
-        const ice_gatering_state = sipCore.pc ? sipCore.pc.iceGatheringState : "unavailable";
-        const ice_connection_state = sipCore.pc ? sipCore.pc.iceConnectionState : "unavailable";
-        if (sipCore.audioStream !== null) {
-            if (this.audioVisualizer === undefined) {
-                this.audioVisualizer = new AudioVisualizer(this.renderRoot, sipCore.audioStream, 16); // TODO: Move to better place
-            }
-        } else {
-            this.audioVisualizer = undefined;
+
+        const scroll_direction = sipCore.call_state !== CALLSTATE.INCOMING ? "scrolling_left" : "scrolling_right";
+        let state_title;
+        switch (sipCore.call_state) {
+            case CALLSTATE.IDLE:
+                state_title = "IDLE";
+                break;
+            case CALLSTATE.INCOMING:
+                state_title = `INCOMING CALL FROM 008`;
+                break;
+            case CALLSTATE.CALLING: // TODO: Rename to OUTGOING?
+                state_title = `CALLING 008`;
+                break;
+            // case CALLSTATE.CONNECTED: // TODO: These custom titles needed?
+            //     state_title = `CONNECTED TO 008`;
+            //     break;
+            // case CALLSTATE.CONNECTING:
+            //     state_title = `CONNECTING TO CALL`;
+            //     break;
+            default:
+                state_title = sipCore.call_state;
+                break;
         }
+
+        let camera = false;
+
+        if (sipCore.call_state !== CALLSTATE.IDLE) {
+            console.log(this.config.extensions);
+            if (this.config.extensions[sipCore.callee] && this.config.extensions[sipCore.callee].camera) {
+                camera = true;
+            } else {
+                if (sipCore.audioStream !== null) {
+                    if (this.audioVisualizer === undefined) {
+                        this.audioVisualizer = new AudioVisualizer(this.renderRoot, sipCore.audioStream, 16); // TODO: Move to better place
+                    }
+                } else {
+                    this.audioVisualizer = undefined;
+                }
+                camera = false;
+            }
+        }
+
         return html`
             <ha-dialog ?open=${this.open} @closed=${this.closeDialog} hideActions flexContent .heading=${true} data-domain="camera">
                 <ha-dialog-header slot="heading">
@@ -136,47 +255,57 @@ class SIPCallDialog extends LitElement {
                     <span slot="title" .title="Call">Call</span>
                 </ha-dialog-header>
                 <div tabindex="-1" dialogInitialFocus>
-                    <div style="width: 100%; text-align: center;">
-                        <h2 style="text-center">${sipCore.currentExtensionConfig.name}</h2>
+                    <div class="top-row">
+                        <h2>${state_title}</h2>
+                        ${sipCore.call_state !== CALLSTATE.IDLE ? html`
+                            <div class="row">
+                                <h2>${sipCore.username} <</h2>
+                                <div class="scrolling_text">
+                                    <h2
+                                        class="text"
+                                        style="animation: ${scroll_direction} 20s linear infinite;"
+                                    >- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</h2>
+                                    <h2
+                                        class="text"
+                                        style="animation: ${scroll_direction} 20s linear infinite;"
+                                    >- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</h2>
+                                </div>
+                                <h2>> ${sipCore.callee}</h2>
+                            </div>
+                        ` : ""}
+                        <h2>${sipCore.timer}</h2>
                     </div>
-                    <ha-camera-stream
-                        allow-exoplayer
-                        muted
-                        .hass=${this.hass}
-                        .stateObj=${this.hass.states[sipCore.currentExtensionConfig.camera]}
-                    ></ha-camera-stream>
-                    <div style="display: flex; justify-content: space-between; padding-left: 46px; padding-right: 46px; padding-top: 24px">
-                        <span>${sipCore.call_state}</span>
-                        <span>${sipCore.timer}</span>
+                    <div class="content">
+                        <div id="audioVisualizer" style="display: ${camera ? "hidden" : "block"}"></div>
+                        ${camera ? html`
+                            <ha-camera-stream
+                                allow-exoplayer
+                                muted
+                                .hass=${this.hass}
+                                .stateObj=${this.hass.states[this.config.extensions[sipCore.callee].camera]}
+                            ></ha-camera-stream>
+                        ` : ""}
                     </div>
-                    call_id: ${sipCore.call_id}
-                    connection_state: ${connection_state}
-                    ice_gathering: ${ice_gatering_state}
-                    ice_connection: ${ice_connection_state}
-                    <br><br>
-                    <div id="audioVisualizer"></div>
-                    <div style="display: flex; justify-content: space-between; padding: 24px;">
-                        ${sipCore.call_state === CALLSTATE.CONNECTED ? html`
-                            <ha-icon-button
-                                class="deny-button"
-                                label="End call"
-                                @click="${() => sipCore.endCall()}">
-                                <ha-icon .icon=${"mdi:phone-hangup"}></ha-icon>
-                            </ha-icon-button>
-                        ` : html`
-                            <ha-icon-button
-                                class="deny-button"
-                                label="Deny call"
-                                @click="${() => sipCore.denyCall()}">
-                                <ha-icon .icon=${"mdi:phone-off"}></ha-icon>
-                            </ha-icon-button>
-                            <ha-icon-button
-                                class="accept-button"
-                                label="Answer call"
-                                @click="${() => sipCore.answerCall()}">
-                                <ha-icon .icon=${"mdi:phone"}></ha-icon>
-                            </ha-icon-button>
-                        `}
+                    <div class="bottom-row">
+                        <ha-icon-button
+                            class="deny-button"
+                            label="End call"
+                            @click="${() => {
+                                if (sipCore.call_state === CALLSTATE.CONNECTED) {
+                                    sipCore.endCall();
+                                } else {
+                                    sipCore.denyCall();
+                                }
+                                this.closeDialog();
+                            }}">
+                            <ha-icon .icon=${"mdi:phone-off"}></ha-icon>
+                        </ha-icon-button>
+                        <ha-icon-button
+                            class="accept-button"
+                            label="Answer call"
+                            @click="${() => sipCore.answerCall()}">
+                            <ha-icon .icon=${"mdi:phone"}></ha-icon>
+                        </ha-icon-button>
                     </div>
                 </div>
             </ha-dialog>

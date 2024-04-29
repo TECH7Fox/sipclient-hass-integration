@@ -1,25 +1,47 @@
 {
-    "username": "1000",
-    "ice_timeout": 1000,
-    "popup": true,
-    "extensions": [
-        {
-            "number": "008",
-            "name": "Jordy Deskphone",
-            "camera": "camera.doorbell"
+    "global": {
+        "default_username": "1000",
+        "ice_timeout": 1000,
+        "popup": {
+            "override_component": null,
+            "card_config": {
+                "state_color": true,
+                "hide_me": false,
+                "extensions": {
+                    "008": {
+                        "name": "Jordy Deskphone",
+                        "camera": "camera.doorbell",
+                        "entity": "binary_sensor.ami_connected",
+                        "override_icon": ""
+                    },
+                    "009": {
+                        "name": "Edit test",
+                        "camera": "camera.doorbell",
+                        "entity": "binary_sensor.ami_connected",
+                        "override_icon": "",
+                        "edit": true
+                    }
+                },
+                "buttons": [
+                    {
+                        "label": "Open Door",
+                        "type": "service_call",
+                        "data": "asterisk.send_action"
+                    },
+                    {
+                        "label": "Send DTMF 1",
+                        "type": "dtmf",
+                        "data": "1"
+                    }
+                ]
+            }
         }
-    ],
-    "buttons": [
+    },
+    "users": [
         {
-            "label": "Open Door",
-            "type": "service_call",
-            "data": "asterisk.send_action"
-        },
-        {
-            "label": "Send DTMF 1",
-            "type": "dtmf",
-            "data": "1"	
+            "username": "1000",
+            "person_entity": "person.admin",
+            "override_settings": {}
         }
-    ],
-    "override_popup_component": null
+    ]
 }

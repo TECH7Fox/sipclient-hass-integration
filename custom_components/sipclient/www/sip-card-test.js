@@ -40,6 +40,45 @@ class ContentCardExample extends LitElement {
                 transform: scaleY( .5 );
                 opacity: .25;
             }
+
+            .wrapper {
+                padding: 8px;
+                padding-top: 0px;
+                padding-bottom: 2px;
+            }
+
+            .flex {
+                flex: 1;
+                margin-top: 6px;
+                margin-bottom: 6px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                min-width: 0;
+            }
+
+            .info, .info > * {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .info {
+                flex: 1 1 30%;
+                cursor: pointer;
+                margin-left: 16px;
+                margin-right: 8px;
+            }
+
+            .editField {
+                width: 100%;
+                margin-left: 16px;
+                margin-right: 8px;
+            }
+
+            state-badge {
+                flex-shrink: 0;
+            }
         `;
     }
 
@@ -64,15 +103,10 @@ class ContentCardExample extends LitElement {
         } else {
             this.audioVisualizer = undefined;
         }
-        let number = "";
-        let name = "";
-        console.log("config at render: ", sipCore.config);
-        if (sipCore.config.extensions && sipCore.config.extensions.length > 0) {
-            number = sipCore.config.extensions[0].number;
-            name = sipCore.config.extensions[0].name;
-        };
         return html`
             <ha-card header="SIP Core test">
+                username: ${sipCore.username}
+                <br>
                 call_id: ${sipCore.call_id}
                 <br>
                 call_state: ${sipCore.call_state}
@@ -83,10 +117,7 @@ class ContentCardExample extends LitElement {
                 <br>
                 ice_connection: ${ice_connection_state}
                 <br><br>
-                <button
-                    id="callButton"
-                    @click="${() => sipCore.startCall(number)}"
-                >${name}</button>
+                
                 <button
                     id="denyButton"
                     @click="${() => sipCore.denyCall()}"
@@ -99,6 +130,56 @@ class ContentCardExample extends LitElement {
                     id="endButton"
                     @click="${() => sipCore.endCall()}"
                 >end</button>
+
+                <br>
+                <br>
+
+                <div class="wrapper">
+
+                ${Object.entries(this.config.extensions).map(([number, extension]) => {
+                    const isMe = number === sipCore.username;
+                    const stateObj = this.hass.states[extension.entity];
+                    if (!(isMe && this.config.hide_me)) {
+                        if (extension.edit) {
+                            return html`
+                                <div class="flex">
+                                    <state-badge
+                                        .stateObj=${stateObj}
+                                        .overrideIcon=${extension.override_icon}
+                                        .stateColor=${this.config.state_color}
+                                    ></state-badge>
+                                    <ha-textfield
+                                        id="custom_${extension.name}"
+                                        .value=${number}
+                                        .label=${extension.name}
+                                        type="text"
+                                        .inputmode="text"
+                                        class="editField"
+                                    ></ha-textfield>
+                                    <mwc-button @click="${() => {
+                                        const customNumber = this.shadowRoot.getElementById(`custom_${extension.name}`).value;
+                                        sipCore.startCall(customNumber)
+                                    }}">CALL</mwc-button>
+                                </div>
+                            `;
+                        } else {
+                            return html`
+                                <div class="flex">
+                                    <state-badge
+                                        stateObj=${stateObj}
+                                        .overrideIcon=${extension.icon}
+                                        .stateColor=${this.config.state_color}
+                                    ></state-badge>
+                                    <div class="info">${extension.name}</div>
+                                    <mwc-button @click="${() => sipCore.startCall(number)}">CALL</mwc-button>
+                                </div>
+                            `;
+                        }
+                    }
+                })}
+
+                </div>
+
                 <br>
                 <br>
                 <div id="audioVisualizer"></div>

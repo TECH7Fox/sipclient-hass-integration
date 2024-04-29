@@ -26,12 +26,15 @@ class SIPCore {
         this.call_state = CALLSTATE.IDLE;
         this.caller = "";
         this.callee = "";
-        this.config = {};
-        this.currentExtensionConfig = {
-            number: "",
-            name: "",
-            camera: "",
+        this.username = "";
+        this.config = {
+            extensions: {},
         };
+        // this.currentExtensionConfig = {
+        //     number: "",
+        //     name: "",
+        //     camera: "",
+        // };
         this.timer = "00:00";
         this.audioStream = null;
         this.hass = document.getElementsByTagName("home-assistant")[0].hass;
@@ -42,11 +45,28 @@ class SIPCore {
             })
             .then(data => {
                 console.log("config loaded: ", data);
-                this.config = data;
+                this.config = data.global;
 
-                this.number = this.config.username;
+                // get current user settings
+                const user_id = this.hass.user.id;
+                const user_settings = data.users.find(user => {
+                    const person_entity = this.hass.states[user.person_entity];
+                    return person_entity && person_entity.attributes.user_id === user_id;
+                });
+
+                if (user_settings) {
+                    console.info("Found user settings: ", user_settings);
+                    this.username = user_settings.username;
+                    if (user_settings.override_settings) {
+                        this.config = Object.assign(this.config, user_settings.override_settings);
+                    }
+                } else {
+                    console.warn(`No user settings found for user: ${this.hass.user.name}. Using fallback username and default settings.`);
+                    this.username = this.config.fallback_username;
+                }
+
                 this._setupEvents();
-                
+
                 if (this.config.popup) {
                     this._setupPopup();
                     window.addEventListener('location-changed', () => {
@@ -56,7 +76,7 @@ class SIPCore {
                     this._setupButton();
                 }
 
-                this._triggerUpdate();
+                this._triggerUpdate("init");
             });
         // TODO: Dynamically import sip-call-dialog.js?
     }
@@ -66,7 +86,7 @@ class SIPCore {
         const panel = document.getElementsByTagName("home-assistant")[0]
             .shadowRoot.querySelector("home-assistant-main")
             .shadowRoot.querySelector("ha-panel-lovelace")
-            
+
         if (panel === null) {
             console.log("panel not found!");
             return;
@@ -104,9 +124,11 @@ class SIPCore {
         }
     }
 
-    _triggerUpdate() {
+    _triggerUpdate(reason) {
         const event = new CustomEvent("sipcore-update", {
-            detail: {},
+            detail: {
+                reason: reason,
+            },
             bubbles: true,
             composed: true,
         });
@@ -123,7 +145,7 @@ class SIPCore {
                 seconds = 0;
             }
             this.timer = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            this._triggerUpdate();
+            this._triggerUpdate("timer_update");
         }, 1000);
     }
 
@@ -144,7 +166,7 @@ class SIPCore {
             const offer = new RTCSessionDescription({sdp: event.data.sdp, type: "offer"})
             await this.pc.setRemoteDescription(offer);
             console.log("incoming offer sdp: ", event.data.sdp);
-            this._triggerUpdate();
+            this._triggerUpdate("incoming_call");
         }, "sipclient_incoming_call_event");
 
         this.hass.connection.subscribeEvents(async (event) => {
@@ -154,7 +176,7 @@ class SIPCore {
             const answer = new RTCSessionDescription({sdp: event.data.sdp, type: "answer"})
             await this.pc.setRemoteDescription(answer);
             console.log("incoming answer sdp: ", event.data.sdp);
-            this._triggerUpdate();
+            this._triggerUpdate("outgoing_call");
         }, "sipclient_outgoing_call_event");
 
         this.hass.connection.subscribeEvents((event) => {
@@ -165,7 +187,7 @@ class SIPCore {
             this.pc = null;
             this.audioStream = null;
             this.call_id = "";
-            this._triggerUpdate();
+            this._triggerUpdate("call_ended");
         }, "sipclient_call_ended_event");
 
         // seek for existing calls
@@ -173,7 +195,7 @@ class SIPCore {
             type: "fire_event",
             event_type: "sipclient_seek_call_event",
             event_data: {
-                number: this.config.username,
+                number: this.username,
             },
         });
     }
@@ -193,12 +215,8 @@ class SIPCore {
             switch (pc.connectionState) {
                 case "connected":
                     console.log("callee: ", this.callee);
-                    this.currentExtensionConfig = { // TODO: Move this and triggerUpdate to function with error checking
-                        number: this.callee,
-                        name: this.config.extensions[0].name, // TODO: Temporary use first
-                        camera: this.config.extensions[0].camera,
-                    };
-                    this._triggerUpdate();
+                    // this.currentExtensionConfig = this.getExtensionConfig(this.callee);
+                    // this._triggerUpdate("connected");
                     this.call_state = CALLSTATE.CONNECTED;
                     this._startTimer();
                     break;
@@ -212,7 +230,7 @@ class SIPCore {
                     console.log("unknown connection state: ", pc.connectionState);
                     break;
             }
-            this._triggerUpdate();
+            this._triggerUpdate("connection_state_change");
         }
 
         pc.ontrack = (event) => {
@@ -231,12 +249,12 @@ class SIPCore {
 
         pc.onicegatheringstatechange = (event) => {
             console.log("onicegatheringstatechange", event);
-            this._triggerUpdate();
+            this._triggerUpdate("ice_gathering_state_change");
         }
 
         pc.oniceconnectionstatechange = (event) => {
             console.log("oniceconnectionstatechange", event);
-            this._triggerUpdate();
+            this._triggerUpdate("ice_connection_state_change");
         }
 
         return pc;
@@ -284,7 +302,7 @@ class SIPCore {
             this._waitForIceGathering.bind(this)
         ).then(() => {
             const offer = this.pc.localDescription;
-            this.caller = this.number;
+            this.caller = this.username;
             this.callee = to;
             this.hass.connection.sendMessagePromise({
                 type: "fire_event",
