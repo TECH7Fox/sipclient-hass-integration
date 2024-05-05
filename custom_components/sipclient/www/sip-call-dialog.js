@@ -173,10 +173,12 @@ class SIPCallDialog extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         this.updateHandler = (event) => {
+            console.log("updateHandler", event.detail.reason);
             switch (event.detail.reason) {
                 case "outgoing_call":
                 case "incoming_call":
                     this.open = true;
+                    break;
                 case "call_ended":
                     this.open = false;
                     break;

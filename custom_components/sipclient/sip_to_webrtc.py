@@ -286,21 +286,21 @@ async def seek_call(hass: HomeAssistant, event: Event):
 def setup_event_listeners(hass: HomeAssistant):
     hass.bus.async_listen(
         "sipclient_answer_call_event",
-        lambda event: hass.async_create_task(answer_call(hass, event)),
+        lambda event: hass.loop.create_task(answer_call(hass, event)),
     )
     hass.bus.async_listen(
         "sipclient_start_call_event",
-        lambda event: hass.async_create_task(start_call(hass, event)),
+        lambda event: hass.loop.create_task(start_call(hass, event)),
     )
     hass.bus.async_listen(
         "sipclient_deny_call_event",
-        lambda event: hass.async_create_task(deny_call(hass, event)),
+        lambda event: hass.loop.create_task(deny_call(hass, event)),
     )
     hass.bus.async_listen(
         "sipclient_end_call_event",
-        lambda event: hass.async_create_task(end_call(hass, event)),
+        lambda event: hass.loop.create_task(end_call(hass, event)),
     )
     hass.bus.async_listen(
         "sipclient_seek_call_event",
-        lambda event: hass.async_create_task(seek_call(hass, event)),
+        lambda event: hass.loop.create_task(seek_call(hass, event)),
     )

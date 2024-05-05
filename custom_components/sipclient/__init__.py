@@ -26,7 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         password=entry.data[CONF_PASSWORD],
         myIP=entry.data[MY_IP],
         sipPort=port,
-        callCallback=lambda call: hass.async_create_task(incoming_call(hass, call)),
+        callCallback=lambda call: hass.loop.create_task(incoming_call(hass, call)),
     )
 
     sip_str = f"{username}@{phone.server}:{phone.port}"
