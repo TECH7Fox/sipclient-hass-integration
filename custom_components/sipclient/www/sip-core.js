@@ -34,7 +34,8 @@ class SIPCore {
         this.caller = "";
         this.callee = "";
         this.username = "";
-        this.currentAudioOutput = localStorage.getItem("sipcore-audio-output") || "";
+        this.currentAudioOutput = localStorage.getItem("sipcore-audio-output") || ""; // TODO: move these things to a separate function?
+        this.currentAudioInput = localStorage.getItem("sipcore-audio-input") || "";
         if (this.currentAudioOutput) {
             this.setAudioOutput(this.currentAudioOutput);
         } else {
@@ -42,6 +43,18 @@ class SIPCore {
                 if (devices.length > 0) {
                     this.currentAudioOutput = devices[0].deviceId;
                     this.setAudioOutput(this.currentAudioOutput);
+                } else {
+                    console.warn("No audio output devices found!");
+                }
+            });
+        }
+        if (!this.currentAudioInput) {
+            this.getAudioDevices(AUDIO_DEVICE_KIND.INPUT).then(devices => {
+                if (devices.length > 0) {
+                    this.currentAudioInput = devices[0].deviceId;
+                    localStorage.setItem("sipcore-audio-input", this.currentAudioInput);
+                } else {
+                    console.warn("No audio input devices found!");
                 }
             });
         }
@@ -280,15 +293,17 @@ class SIPCore {
     }
 
     async _addMedia() {
-        // const oldTrack = this.pc.getSenders().find(sender => sender.track.kind === 'audio');
-        // if (oldTrack) {
-        //     this.pc.removeTrack(oldTrack);
-        // }
+        // first remove old track when changing audio input
+        const oldTrack = this.pc.getSenders().find(sender => sender.track.kind === 'audio');
+        if (oldTrack) {
+            this.pc.removeTrack(oldTrack);
+            console.log("Removed old track: ", oldTrack.kind);
+        }
 
         const stream = await navigator.mediaDevices.getUserMedia(
             {
                 video: false,
-                audio: true, // { deviceId: deviceId },
+                audio: { deviceId: this.currentAudioInput },
             }
         );
         for (const track of stream.getTracks()) {
@@ -402,6 +417,7 @@ class SIPCore {
     }
 
     setAudioOutput(deviceId) { // TODO: make async and return boolean?
+        console.log("setting audio output: ", deviceId);
         localStorage.setItem("sipcore-audio-output", deviceId);
         this.currentAudioOutput = deviceId;
         const audio = document.getElementById("sipcore-audio");
@@ -415,10 +431,18 @@ class SIPCore {
                 });
         }
     }
-    
 
+    setAudioInput(deviceId) {
+        console.log("setting audio input: ", deviceId);
+        localStorage.setItem("sipcore-audio-input", deviceId);
+        this.currentAudioInput = deviceId;
+        if (this.pc) {
+            this._addMedia(); // TODO: combine addMedia and setAudioInput?
+        }
+    }
+    
     async getAudioDevices(audioKind = AUDIO_DEVICE_KIND.ALL) {
-        console.log(await navigator.mediaDevices.getUserMedia({ audio: true }));
+        console.log(await navigator.mediaDevices.getUserMedia({ audio: true })); // TODO: remove?
         const devices = await navigator.mediaDevices.enumerateDevices();
         console.log("devices: ", devices);
         if (audioKind === AUDIO_DEVICE_KIND.ALL) {

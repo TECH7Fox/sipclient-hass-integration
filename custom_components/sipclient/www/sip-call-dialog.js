@@ -10,10 +10,13 @@ import { AudioVisualizer } from "./audio-visualizer.js";
 
 class SIPCallDialog extends LitElement {
 
+    // @property({ type: Boolean }) open = false; TODO: Use decorators when using webpack
+
     constructor() {
         super();
         this.open = false;
-        this.audioDevices = [];
+        this.outputDevices = [];
+        this.inputDevices = [];
     }
 
     static get properties() {
@@ -183,10 +186,6 @@ class SIPCallDialog extends LitElement {
         window.removeEventListener('sipcore-update', this.updateHandler);
     }
 
-    closeDialog() {
-        this.open = false;
-    }
-
     render() {
         this.hass = sipCore.hass;
         this.config = sipCore.config.popup.card_config;
@@ -235,7 +234,7 @@ class SIPCallDialog extends LitElement {
         }
 
         return html`
-            <ha-dialog ?open=${this.open} @closed=${this.closeDialog} hideActions flexContent .heading=${true} data-domain="camera">
+            <ha-dialog ?open=${this.open} @closed=${sipCore.closePopup} hideActions flexContent .heading=${true} data-domain="camera">
                 <ha-dialog-header slot="heading">
                     <ha-icon-button
                         dialogAction="cancel"
@@ -279,45 +278,69 @@ class SIPCallDialog extends LitElement {
                     </div>
                     <div class="bottom-row">
                         <div>
-                        <ha-icon-button
-                            class="deny-button"
-                            label="End call"
-                            @click="${() => {
-                                if (sipCore.call_state === CALLSTATE.CONNECTED) {
-                                    sipCore.endCall();
-                                } else {
-                                    sipCore.denyCall();
-                                }
-                                this.closeDialog();
-                            }}">
-                            <ha-icon .icon=${"mdi:phone-off"}></ha-icon>
-                        </ha-icon-button>
-                        <ha-button-menu
-                            corner="BOTTOM_END"
-                            menucorner="END"
-                            fixed
-                            @click="${(event) => {
-                                console.log("clicked", event);
-                                event.stopPropagation();
-                            }}"
-                        >
                             <ha-icon-button
-                                slot="trigger"
-                                label="Audio output"
-                                class="audio-output-button">
-                                <ha-icon .icon=${"mdi:speaker"}></ha-icon>
+                                class="deny-button"
+                                label="End call"
+                                @click="${() => {
+                                    if (sipCore.call_state === CALLSTATE.CONNECTED) {
+                                        sipCore.endCall();
+                                    } else {
+                                        sipCore.denyCall();
+                                    }
+                                    this.closeDialog();
+                                }}">
+                                <ha-icon .icon=${"mdi:phone-off"}></ha-icon>
                             </ha-icon-button>
-                            ${this.audioDevices.map((device) => html`
-                                <mwc-list-item
-                                    graphic="icon"
-                                    @click="${() => sipCore.setAudioOutput(device.deviceId)}"
-                                >
-                                    ${device.label}
-                                    ${sipCore.currentAudioOutput === device.deviceId ? html`<ha-icon slot="graphic" .icon=${"mdi:check"} style="color: dodgerblue;"></ha-icon>` : ""}
-                                </mwc-list-item>
-                            </mwc-list-item>
-                            `)}
-                        </ha-button-menu>
+                            <ha-button-menu
+                                corner="BOTTOM_END"
+                                menucorner="END"
+                                fixed
+                                @closed="${(event) => event.stopPropagation()}"
+                            >
+                                <ha-icon-button
+                                    slot="trigger"
+                                    label="Audio output"
+                                    class="audio-output-button">
+                                    <ha-icon .icon=${"mdi:speaker"}></ha-icon>
+                                </ha-icon-button>
+                                ${this.outputDevices.map((device) => html`
+                                    <ha-list-item
+                                        graphic="icon"
+                                        @click="${() => {
+                                            sipCore.setAudioOutput(device.deviceId);
+                                            this.requestUpdate();
+                                        }}"
+                                    >
+                                        ${device.label}
+                                        ${sipCore.currentAudioOutput === device.deviceId ? html`<ha-icon slot="graphic" .icon=${"mdi:check"} style="color: dodgerblue;"></ha-icon>` : ""}
+                                    </ha-list-item>
+                                `)}
+                            </ha-button-menu>
+                            <ha-button-menu
+                                corner="BOTTOM_END"
+                                menucorner="END"
+                                fixed
+                                @closed="${(event) => event.stopPropagation()}"
+                            >
+                                <ha-icon-button
+                                    slot="trigger"
+                                    label="Audio input"
+                                    class="audio-output-button">
+                                    <ha-icon .icon=${"mdi:microphone"}></ha-icon>
+                                </ha-icon-button>
+                                ${this.inputDevices.map((device) => html`
+                                    <ha-list-item
+                                        graphic="icon"
+                                        @click="${() => {
+                                            sipCore.setAudioInput(device.deviceId);
+                                            this.requestUpdate();
+                                        }}"
+                                    >
+                                        ${device.label}
+                                        ${sipCore.currentAudioInput === device.deviceId ? html`<ha-icon slot="graphic" .icon=${"mdi:check"} style="color: dodgerblue;"></ha-icon>` : ""}
+                                    </ha-list-item>
+                                `)}
+                            </ha-button-menu>
                         </div>
                         <ha-icon-button
                             class="accept-button"
@@ -332,7 +355,8 @@ class SIPCallDialog extends LitElement {
     }
 
     async firstUpdated() {
-        this.audioDevices = await sipCore.getAudioDevices(AUDIO_DEVICE_KIND.OUTPUT); // TODO: Move this to sipcore itself?
+        this.outputDevices = await sipCore.getAudioDevices(AUDIO_DEVICE_KIND.OUTPUT); // TODO: Move this to sipcore itself?
+        this.inputDevices = await sipCore.getAudioDevices(AUDIO_DEVICE_KIND.INPUT); 
     }
 }
 
