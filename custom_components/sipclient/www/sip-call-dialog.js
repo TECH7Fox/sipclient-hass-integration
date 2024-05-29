@@ -4,16 +4,16 @@ import {
     css,
 } from "https://unpkg.com/lit-element@2.0.1/lit-element.js?module";
 // TODO: Use customelement decorator
-import { sipCore, CALLSTATE } from "./sip-core.js";
+import { sipCore, CALLSTATE, AUDIO_DEVICE_KIND } from "./sip-core.js";
 import { AudioVisualizer } from "./audio-visualizer.js";
 
-console.log("sip-card-test.js");
 
 class SIPCallDialog extends LitElement {
 
     constructor() {
         super();
         this.open = false;
+        this.audioDevices = [];
     }
 
     static get properties() {
@@ -86,7 +86,7 @@ class SIPCallDialog extends LitElement {
                 color: var(--label-badge-red);
             }
 
-            .deny-button, .accept-button {
+            .deny-button, .accept-button, .audio-output-button {
                 --mdc-icon-button-size: 64px;
                 --mdc-icon-size: 32px;
             }
@@ -173,16 +173,6 @@ class SIPCallDialog extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         this.updateHandler = (event) => {
-            console.log("updateHandler", event.detail.reason);
-            switch (event.detail.reason) {
-                case "outgoing_call":
-                case "incoming_call":
-                    this.open = true;
-                    break;
-                case "call_ended":
-                    this.open = false;
-                    break;
-            }
             this.requestUpdate();
         }
         window.addEventListener('sipcore-update', this.updateHandler);
@@ -195,7 +185,6 @@ class SIPCallDialog extends LitElement {
 
     closeDialog() {
         this.open = false;
-        this.requestUpdate();
     }
 
     render() {
@@ -289,6 +278,7 @@ class SIPCallDialog extends LitElement {
                         ` : ""}
                     </div>
                     <div class="bottom-row">
+                        <div>
                         <ha-icon-button
                             class="deny-button"
                             label="End call"
@@ -302,6 +292,33 @@ class SIPCallDialog extends LitElement {
                             }}">
                             <ha-icon .icon=${"mdi:phone-off"}></ha-icon>
                         </ha-icon-button>
+                        <ha-button-menu
+                            corner="BOTTOM_END"
+                            menucorner="END"
+                            fixed
+                            @click="${(event) => {
+                                console.log("clicked", event);
+                                event.stopPropagation();
+                            }}"
+                        >
+                            <ha-icon-button
+                                slot="trigger"
+                                label="Audio output"
+                                class="audio-output-button">
+                                <ha-icon .icon=${"mdi:speaker"}></ha-icon>
+                            </ha-icon-button>
+                            ${this.audioDevices.map((device) => html`
+                                <mwc-list-item
+                                    graphic="icon"
+                                    @click="${() => sipCore.setAudioOutput(device.deviceId)}"
+                                >
+                                    ${device.label}
+                                    ${sipCore.currentAudioOutput === device.deviceId ? html`<ha-icon slot="graphic" .icon=${"mdi:check"} style="color: dodgerblue;"></ha-icon>` : ""}
+                                </mwc-list-item>
+                            </mwc-list-item>
+                            `)}
+                        </ha-button-menu>
+                        </div>
                         <ha-icon-button
                             class="accept-button"
                             label="Answer call"
@@ -314,8 +331,8 @@ class SIPCallDialog extends LitElement {
         `;
     }
 
-    firstUpdated() {
-        console.log("firstUpdated popup");
+    async firstUpdated() {
+        this.audioDevices = await sipCore.getAudioDevices(AUDIO_DEVICE_KIND.OUTPUT); // TODO: Move this to sipcore itself?
     }
 }
 

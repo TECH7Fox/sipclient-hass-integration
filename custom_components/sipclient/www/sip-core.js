@@ -19,6 +19,13 @@ class CALLSTATE {
 }
 
 
+class AUDIO_DEVICE_KIND {
+    static INPUT = "audioinput";
+    static OUTPUT = "audiooutput";
+    static ALL = "all";
+}
+
+
 class SIPCore {
     constructor() {
         this.pc = null;
@@ -27,6 +34,17 @@ class SIPCore {
         this.caller = "";
         this.callee = "";
         this.username = "";
+        this.currentAudioOutput = localStorage.getItem("sipcore-audio-output") || "";
+        if (this.currentAudioOutput) {
+            this.setAudioOutput(this.currentAudioOutput);
+        } else {
+            this.getAudioDevices(AUDIO_DEVICE_KIND.OUTPUT).then(devices => {
+                if (devices.length > 0) {
+                    this.currentAudioOutput = devices[0].deviceId;
+                    this.setAudioOutput(this.currentAudioOutput);
+                }
+            });
+        }
         this.config = {
             extensions: {},
         };
@@ -82,7 +100,6 @@ class SIPCore {
     }
 
     _setupButton() {
-        const dialog = document.getElementsByTagName("sip-call-dialog")[0];
         const panel = document.getElementsByTagName("home-assistant")[0]
             .shadowRoot.querySelector("home-assistant-main")
             .shadowRoot.querySelector("ha-panel-lovelace")
@@ -107,8 +124,7 @@ class SIPCore {
         callButton.id = "sipcore-call-button";
         callButton.appendChild(icon);
         callButton.addEventListener("click", () => {
-            console.log("open call dialog!");
-            dialog.open = true;
+            this.openPopup();
         });
         actionItems.appendChild(callButton);
     }
@@ -167,6 +183,7 @@ class SIPCore {
             await this.pc.setRemoteDescription(offer);
             console.log("incoming offer sdp: ", event.data.sdp);
             this._triggerUpdate("incoming_call");
+            this.openPopup();
         }, "sipclient_incoming_call_event");
 
         this.hass.connection.subscribeEvents(async (event) => {
@@ -177,6 +194,7 @@ class SIPCore {
             await this.pc.setRemoteDescription(answer);
             console.log("incoming answer sdp: ", event.data.sdp);
             this._triggerUpdate("outgoing_call");
+            this.openPopup();
         }, "sipclient_outgoing_call_event");
 
         this.hass.connection.subscribeEvents((event) => {
@@ -188,6 +206,7 @@ class SIPCore {
             this.audioStream = null;
             this.call_id = "";
             this._triggerUpdate("call_ended");
+            this.closePopup();
         }, "sipclient_call_ended_event");
 
         // seek for existing calls
@@ -261,10 +280,15 @@ class SIPCore {
     }
 
     async _addMedia() {
+        // const oldTrack = this.pc.getSenders().find(sender => sender.track.kind === 'audio');
+        // if (oldTrack) {
+        //     this.pc.removeTrack(oldTrack);
+        // }
+
         const stream = await navigator.mediaDevices.getUserMedia(
             {
                 video: false,
-                audio: true,
+                audio: true, // { deviceId: deviceId },
             }
         );
         for (const track of stream.getTracks()) {
@@ -364,8 +388,45 @@ class SIPCore {
             });
         });
     }
+
+    openPopup() {
+        const dialogList = document.getElementsByTagName("sip-call-dialog");
+        if (dialogList.length > 0)
+            dialogList[0].open = true;
+    }
+
+    closePopup() {
+        const dialogList = document.getElementsByTagName("sip-call-dialog");
+        if (dialogList.length > 0)
+            dialogList[0].open = false;
+    }
+
+    setAudioOutput(deviceId) { // TODO: make async and return boolean?
+        localStorage.setItem("sipcore-audio-output", deviceId);
+        this.currentAudioOutput = deviceId;
+        const audio = document.getElementById("sipcore-audio");
+        if (audio) {
+            audio.setSinkId(deviceId)
+                .then(() => {
+                    console.log(`Success, audio output set to ${deviceId}`);
+                })
+                .catch((error) => {
+                    console.error('Error: ', error);
+                });
+        }
+    }
+    
+
+    async getAudioDevices(audioKind = AUDIO_DEVICE_KIND.ALL) {
+        console.log(await navigator.mediaDevices.getUserMedia({ audio: true }));
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        console.log("devices: ", devices);
+        if (audioKind === AUDIO_DEVICE_KIND.ALL) {
+            return devices.filter(device => device.kind !== "videoinput");
+        }
+        return devices.filter(device => device.kind === audioKind);
+    }
 }
 
 const sipCore = new SIPCore();
-// window.sipCore = sipCore; // TODO: plan B
-export { sipCore, CALLSTATE };
+export { sipCore, CALLSTATE, AUDIO_DEVICE_KIND };

@@ -165,7 +165,10 @@ async def call_ended(hass: HomeAssistant, call: VoIPCall, reason: EndedReason):
         },
     )
 
-    await pc.close()
+    if pc.connectionState != "closed":
+        await pc.close()
+    else:
+        _LOGGER.debug("Peer connection already closed")
     if call.call_id in hass.data[DOMAIN]["calls"]:
         del hass.data[DOMAIN]["calls"][call.call_id]
 
@@ -278,7 +281,7 @@ async def seek_call(hass: HomeAssistant, event: Event):
     if not phone:
         _LOGGER.error(f"Phone {event.data['number']} not found")
         return
-    for call in phone.calls.values():
+    for call in list(phone.calls.values()):
         if call.state == CallState.RINGING:
             await incoming_call(hass, call)
 
