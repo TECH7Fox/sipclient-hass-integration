@@ -89,7 +89,7 @@ class SIPCallDialog extends LitElement {
                 color: var(--label-badge-red);
             }
 
-            .deny-button, .accept-button, .audio-output-button {
+            .deny-button, .accept-button, .audio-button {
                 --mdc-icon-button-size: 64px;
                 --mdc-icon-size: 32px;
             }
@@ -190,8 +190,6 @@ class SIPCallDialog extends LitElement {
         this.hass = sipCore.hass;
         this.config = sipCore.config.popup.card_config;
 
-        console.log("dialog open: ", this.open);
-
         const scroll_direction = sipCore.call_state !== CALLSTATE.INCOMING ? "scrolling_left" : "scrolling_right";
         let state_title;
         switch (sipCore.call_state) {
@@ -218,7 +216,6 @@ class SIPCallDialog extends LitElement {
         let camera = false;
 
         if (sipCore.call_state !== CALLSTATE.IDLE) {
-            console.log(this.config.extensions);
             if (this.config.extensions[sipCore.callee] && this.config.extensions[sipCore.callee].camera) {
                 camera = true;
             } else {
@@ -287,7 +284,7 @@ class SIPCallDialog extends LitElement {
                                     } else {
                                         sipCore.denyCall();
                                     }
-                                    this.closeDialog();
+                                    sipCore.closePopup();
                                 }}">
                                 <ha-icon .icon=${"mdi:phone-off"}></ha-icon>
                             </ha-icon-button>
@@ -300,7 +297,7 @@ class SIPCallDialog extends LitElement {
                                 <ha-icon-button
                                     slot="trigger"
                                     label="Audio output"
-                                    class="audio-output-button">
+                                    class="audio-button">
                                     <ha-icon .icon=${"mdi:speaker"}></ha-icon>
                                 </ha-icon-button>
                                 ${this.outputDevices.map((device) => html`
@@ -325,7 +322,7 @@ class SIPCallDialog extends LitElement {
                                 <ha-icon-button
                                     slot="trigger"
                                     label="Audio input"
-                                    class="audio-output-button">
+                                    class="audio-button">
                                     <ha-icon .icon=${"mdi:microphone"}></ha-icon>
                                 </ha-icon-button>
                                 ${this.inputDevices.map((device) => html`

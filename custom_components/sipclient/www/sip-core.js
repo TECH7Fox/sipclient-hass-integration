@@ -442,9 +442,10 @@ class SIPCore {
     }
     
     async getAudioDevices(audioKind = AUDIO_DEVICE_KIND.ALL) {
-        console.log(await navigator.mediaDevices.getUserMedia({ audio: true })); // TODO: remove?
+        // first get permission to use audio devices
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        
         const devices = await navigator.mediaDevices.enumerateDevices();
-        console.log("devices: ", devices);
         if (audioKind === AUDIO_DEVICE_KIND.ALL) {
             return devices.filter(device => device.kind !== "videoinput");
         }
