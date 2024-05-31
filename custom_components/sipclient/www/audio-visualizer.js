@@ -45,23 +45,23 @@ class AudioVisualizer {
             elmStyles.opacity = Math.max( .25, value );
         }
     };
-  
+
     connectStream(stream) {
         this.analyser = this.audioContext.createAnalyser();
         const source = this.audioContext.createMediaStreamSource(stream);
         source.connect(this.analyser);
         this.analyser.smoothingTimeConstant = 0.5;
         this.analyser.fftSize = 32;
-  
+
         this.initRenderLoop();
     }
-  
+
     initRenderLoop() {
         const frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
         const renderFrame = () => {
             this.analyser.getByteFrequencyData(frequencyData);
             this.processFrame(frequencyData);
-            
+
             if (this.shouldStop !== true) {
                 requestAnimationFrame(renderFrame);
             }

@@ -440,11 +440,11 @@ class SIPCore {
             this._addMedia(); // TODO: combine addMedia and setAudioInput?
         }
     }
-    
+
     async getAudioDevices(audioKind = AUDIO_DEVICE_KIND.ALL) {
         // first get permission to use audio devices
         await navigator.mediaDevices.getUserMedia({ audio: true });
-        
+
         const devices = await navigator.mediaDevices.enumerateDevices();
         if (audioKind === AUDIO_DEVICE_KIND.ALL) {
             return devices.filter(device => device.kind !== "videoinput");

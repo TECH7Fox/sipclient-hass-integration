@@ -32,7 +32,7 @@ class SIPCallDialog extends LitElement {
             ha-card {
                 /* sample css */
             }
-            
+
             ha-icon {
                 display: flex;
                 align-items: center;
@@ -112,7 +112,7 @@ class SIPCallDialog extends LitElement {
                 justify-content: space-between;
                 margin: 24px;
             }
-              
+
             .scrolling_text {
                 overflow: hidden;
                 display: flex;
@@ -138,13 +138,13 @@ class SIPCallDialog extends LitElement {
                 from { -moz-transform: translate3d(0, 0, 0); }
                 to { -moz-transform: translate3d(-100%, 0, 0); }
             }
-              
+
             @-webkit-keyframes animate_text {
                 from { -webkit-transform: translate3d(0, 0, 0); }
                 to { -webkit-transform: translate3d(-100%, 0, 0); }
             }
             */
-            
+
             @keyframes scrolling_left {
                 from {
                     -webkit-transform: translate3d(0, 0, 0);
@@ -157,7 +157,7 @@ class SIPCallDialog extends LitElement {
                     transform: translate3d(-100%, 0, 0);
                 }
             }
-            
+
             @keyframes scrolling_right {
                 from {
                     -webkit-transform: translate3d(-100%, 0, 0);
@@ -180,7 +180,7 @@ class SIPCallDialog extends LitElement {
         }
         window.addEventListener('sipcore-update', this.updateHandler);
     }
-    
+
     disconnectedCallback() {
         super.disconnectedCallback();
         window.removeEventListener('sipcore-update', this.updateHandler);
@@ -353,7 +353,7 @@ class SIPCallDialog extends LitElement {
 
     async firstUpdated() {
         this.outputDevices = await sipCore.getAudioDevices(AUDIO_DEVICE_KIND.OUTPUT); // TODO: Move this to sipcore itself?
-        this.inputDevices = await sipCore.getAudioDevices(AUDIO_DEVICE_KIND.INPUT); 
+        this.inputDevices = await sipCore.getAudioDevices(AUDIO_DEVICE_KIND.INPUT);
     }
 }
 
