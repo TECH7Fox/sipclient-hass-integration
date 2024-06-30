@@ -85,7 +85,7 @@ class ContentCardExample extends LitElement {
         super.connectedCallback();
         window.addEventListener('sipcore-update', () => this.requestUpdate());
     }
-    
+
     disconnectedCallback() {
         super.disconnectedCallback();
         window.removeEventListener('sipcore-update', () => this.requestUpdate());
@@ -112,7 +112,7 @@ class ContentCardExample extends LitElement {
                         <br>
                         ice_connection: ${ice_connection_state}
                         <br>
-                
+
                         <button
                             id="denyButton"
                             @click="${() => sipCore.denyCall()}"

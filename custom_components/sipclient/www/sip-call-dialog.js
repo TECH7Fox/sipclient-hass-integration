@@ -32,7 +32,7 @@ class SIPCallDialog extends LitElement {
             ha-card {
                 /* sample css */
             }
-            
+
             ha-icon {
                 display: flex;
                 align-items: center;
@@ -135,7 +135,7 @@ class SIPCallDialog extends LitElement {
         }
         window.addEventListener('sipcore-update', this.updateHandler);
     }
-    
+
     disconnectedCallback() {
         super.disconnectedCallback();
         window.removeEventListener('sipcore-update', this.updateHandler);
@@ -291,7 +291,7 @@ class SIPCallDialog extends LitElement {
 
     async firstUpdated() {
         this.outputDevices = await sipCore.getAudioDevices(AUDIO_DEVICE_KIND.OUTPUT); // TODO: Move this to sipcore itself?
-        this.inputDevices = await sipCore.getAudioDevices(AUDIO_DEVICE_KIND.INPUT); 
+        this.inputDevices = await sipCore.getAudioDevices(AUDIO_DEVICE_KIND.INPUT);
     }
 }
 
