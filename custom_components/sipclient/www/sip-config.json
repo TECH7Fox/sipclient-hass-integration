@@ -5,28 +5,28 @@
         "popup": {
             "override_component": null,
             "card_config": {
-                "state_color": true,
-                "hide_me": false,
                 "extensions": {
                     "008": {
                         "name": "Jordy Deskphone",
-                        "camera": "camera.doorbell",
-                        "entity": "binary_sensor.ami_connected",
-                        "override_icon": ""
+                        "camera": "camera.doorbell"
                     },
                     "009": {
-                        "name": "Edit test",
-                        "camera": "camera.doorbell",
-                        "entity": "binary_sensor.ami_connected",
-                        "override_icon": "",
-                        "edit": true
+                        "name": "Other test",
+                        "camera": "camera.doorbell"
                     }
                 },
                 "buttons": [
                     {
                         "label": "Open Door",
                         "type": "service_call",
-                        "data": "asterisk.send_action"
+                        "data": "asterisk.send_action",
+                        "service_data": {
+                            "action": "PlayDTMF",
+                            "parameters": {
+                                "Channel": "howtogetthechannelhere???",
+                                "Digit": "9"
+                            }
+                        }
                     },
                     {
                         "label": "Send DTMF 1",
