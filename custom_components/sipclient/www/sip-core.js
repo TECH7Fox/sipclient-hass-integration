@@ -294,7 +294,7 @@ class SIPCore {
 
     async _addMedia() {
         // first remove old track when changing audio input
-        const oldTrack = this.pc.getSenders().find(sender => sender.track.kind === 'audio');
+        const oldTrack = this.pc.getSenders().find(sender => sender.track?.kind === 'audio');
         if (oldTrack) {
             this.pc.removeTrack(oldTrack);
             console.log("Removed old track: ", oldTrack.kind);
@@ -437,7 +437,7 @@ class SIPCore {
         localStorage.setItem("sipcore-audio-input", deviceId);
         this.currentAudioInput = deviceId;
         if (this.pc) {
-            this._addMedia(); // TODO: combine addMedia and setAudioInput?
+            this._addMedia();
         }
     }
     

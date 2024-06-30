@@ -71,10 +71,11 @@ class OutgoingStreamTrack(MediaStreamTrack):
 
 
 async def create_pc(hass: HomeAssistant, call_id: str) -> RTCPeerConnection:
+    stun_servers = hass.data[DOMAIN]["stun_servers"]
     configuration = RTCConfiguration(
         iceServers=[
             RTCIceServer(
-                urls=["stun:stun.l.google.com:19302"]  # TODO: Make configurable
+                urls=stun_servers,
             )
         ]
     )

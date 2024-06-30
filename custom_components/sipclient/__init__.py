@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 import pyVoIP
 from pyVoIP.VoIP import PhoneStatus, VoIPPhone
 
-from .const import DOMAIN, MY_IP
+from .const import DOMAIN, MY_IP, STUN_SERVERS
 from .sip_to_webrtc import incoming_call, setup_event_listeners
 
 pyVoIP.REGISTER_FAILURE_THRESHOLD = 1
@@ -55,6 +55,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         hass.data[DOMAIN] = {
             "phones": {username: phone},
             "calls": {},
+            "stun_servers": str(entry.data[STUN_SERVERS]).split(",")
         }
         setup_event_listeners(hass)
     else:

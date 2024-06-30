@@ -69,7 +69,7 @@ class SIPCallDialog extends LitElement {
                 display: block;
             }
 
-            @media (max-width: 450px), (max-height: 500px) {
+            @media (max-width: 600px), (max-height: 600px) {
                 ha-dialog {
                   --dialog-surface-margin-top: 0px;
                   --mdc-dialog-min-width: calc( 100vw - env(safe-area-inset-right) - env(safe-area-inset-left) );
@@ -112,13 +112,6 @@ class SIPCallDialog extends LitElement {
                 justify-content: space-between;
                 margin: 24px;
             }
-              
-            .scrolling_text {
-                overflow: hidden;
-                display: flex;
-                white-space: nowrap;
-                width: 80px;
-            }
 
             .text {
                 margin-right: 5px;
@@ -131,44 +124,6 @@ class SIPCallDialog extends LitElement {
                 min-height: 300px;
                 width: 100%;
                 background-color: #2d3033;
-            }
-
-            /* TODO: check if needed
-            @-moz-keyframes animate_text {
-                from { -moz-transform: translate3d(0, 0, 0); }
-                to { -moz-transform: translate3d(-100%, 0, 0); }
-            }
-              
-            @-webkit-keyframes animate_text {
-                from { -webkit-transform: translate3d(0, 0, 0); }
-                to { -webkit-transform: translate3d(-100%, 0, 0); }
-            }
-            */
-            
-            @keyframes scrolling_left {
-                from {
-                    -webkit-transform: translate3d(0, 0, 0);
-                    -moz-transform: translate3d(0, 0, 0);
-                    transform: translate3d(0, 0, 0);
-                }
-                to {
-                    -webkit-transform: translate3d(-100%, 0, 0);
-                    -moz-transform: translate3d(-100%, 0, 0);
-                    transform: translate3d(-100%, 0, 0);
-                }
-            }
-            
-            @keyframes scrolling_right {
-                from {
-                    -webkit-transform: translate3d(-100%, 0, 0);
-                    -moz-transform: translate3d(-100%, 0, 0);
-                    transform: translate3d(-100%, 0, 0);
-                }
-                to {
-                    -webkit-transform: translate3d(0, 0, 0);
-                    -moz-transform: translate3d(0, 0, 0);
-                    transform: translate3d(0, 0, 0);
-                }
             }
         `;
     }
@@ -190,24 +145,23 @@ class SIPCallDialog extends LitElement {
         this.hass = sipCore.hass;
         this.config = sipCore.config.popup.card_config;
 
-        const scroll_direction = sipCore.call_state !== CALLSTATE.INCOMING ? "scrolling_left" : "scrolling_right";
         let state_title;
         switch (sipCore.call_state) {
             case CALLSTATE.IDLE:
                 state_title = "IDLE";
                 break;
             case CALLSTATE.INCOMING:
-                state_title = `INCOMING CALL FROM 008`;
+                state_title = `INCOMING CALL FROM ${sipCore.caller}`;
                 break;
-            case CALLSTATE.CALLING: // TODO: Rename to OUTGOING?
-                state_title = `CALLING 008`;
+            case CALLSTATE.CALLING:
+                state_title = `CALLING ${sipCore.callee}`;
                 break;
-            // case CALLSTATE.CONNECTED: // TODO: These custom titles needed?
-            //     state_title = `CONNECTED TO 008`;
-            //     break;
-            // case CALLSTATE.CONNECTING:
-            //     state_title = `CONNECTING TO CALL`;
-            //     break;
+            case CALLSTATE.CONNECTED:
+                state_title = `CONNECTED TO ${sipCore.callee}`;
+                break;
+            case CALLSTATE.CONNECTING:
+                state_title = `CONNECTING TO ${sipCore.callee}`;
+                break;
             default:
                 state_title = sipCore.call_state;
                 break;
@@ -244,22 +198,6 @@ class SIPCallDialog extends LitElement {
                 <div tabindex="-1" dialogInitialFocus>
                     <div class="top-row">
                         <h2>${state_title}</h2>
-                        ${sipCore.call_state !== CALLSTATE.IDLE ? html`
-                            <div class="row">
-                                <h2>${sipCore.username} <</h2>
-                                <div class="scrolling_text">
-                                    <h2
-                                        class="text"
-                                        style="animation: ${scroll_direction} 20s linear infinite;"
-                                    >- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</h2>
-                                    <h2
-                                        class="text"
-                                        style="animation: ${scroll_direction} 20s linear infinite;"
-                                    >- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</h2>
-                                </div>
-                                <h2>> ${sipCore.callee}</h2>
-                            </div>
-                        ` : ""}
                         <h2>${sipCore.timer}</h2>
                     </div>
                     <div class="content">

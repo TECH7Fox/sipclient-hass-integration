@@ -133,42 +133,42 @@ class ContentCardExample extends LitElement {
                     ${Object.entries(this.config.extensions).map(([number, extension]) => {
                         const isMe = number === sipCore.username;
                         const stateObj = this.hass.states[extension.entity];
-                        if (!(isMe && this.config.hide_me)) {
-                            if (extension.edit) {
-                                return html`
-                                    <div class="flex">
-                                        <state-badge
-                                            .stateObj=${stateObj}
-                                            .overrideIcon=${extension.override_icon}
-                                            .stateColor=${this.config.state_color}
-                                        ></state-badge>
-                                        <ha-textfield
-                                            id="custom_${extension.name}"
-                                            .value=${number}
-                                            .label=${extension.name}
-                                            type="text"
-                                            .inputmode="text"
-                                            class="editField"
-                                        ></ha-textfield>
-                                        <mwc-button @click="${() => {
-                                            const customNumber = this.shadowRoot.getElementById(`custom_${extension.name}`).value;
-                                            sipCore.startCall(customNumber)
-                                        }}">CALL</mwc-button>
-                                    </div>
-                                `;
-                            } else {
-                                return html`
-                                    <div class="flex">
-                                        <state-badge
-                                            stateObj=${stateObj}
-                                            .overrideIcon=${extension.icon}
-                                            .stateColor=${this.config.state_color}
-                                        ></state-badge>
-                                        <div class="info">${extension.name}</div>
-                                        <mwc-button @click="${() => sipCore.startCall(number)}">CALL</mwc-button>
-                                    </div>
-                                `;
-                            }
+                        if (extension.hidden) return;
+                        if (isMe && this.config.hide_me) return;
+                        if (extension.edit) {
+                            return html`
+                                <div class="flex">
+                                    <state-badge
+                                        .stateObj=${stateObj}
+                                        .overrideIcon=${extension.override_icon}
+                                        .stateColor=${this.config.state_color}
+                                    ></state-badge>
+                                    <ha-textfield
+                                        id="custom_${extension.name}"
+                                        .value=${number}
+                                        .label=${extension.name}
+                                        type="text"
+                                        .inputmode="text"
+                                        class="editField"
+                                    ></ha-textfield>
+                                    <mwc-button @click="${() => {
+                                        const customNumber = this.shadowRoot.getElementById(`custom_${extension.name}`).value;
+                                        sipCore.startCall(customNumber)
+                                    }}">CALL</mwc-button>
+                                </div>
+                            `;
+                        } else {
+                            return html`
+                                <div class="flex">
+                                    <state-badge
+                                        .stateObj=${stateObj}
+                                        .overrideIcon=${extension.override_icon}
+                                        .stateColor=${this.config.state_color}
+                                    ></state-badge>
+                                    <div class="info">${extension.name}</div>
+                                    <mwc-button @click="${() => sipCore.startCall(number)}">CALL</mwc-button>
+                                </div>
+                            `;
                         }
                     })}
                 </div>
